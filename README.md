@@ -1,2 +1,2 @@
-# dash-project
-Project for utilizing Python Dash
+# homelessness-dash
+Dashboard application for visualizing homelessness in Toronto
