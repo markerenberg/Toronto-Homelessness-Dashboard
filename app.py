@@ -111,7 +111,8 @@ colors = {
 #    font_color=colors['text']
 #)
 
-app = dash.Dash(__name__, external_stylesheets=[dbc.themes.LITERA])
+#app = dash.Dash(__name__, external_stylesheets=[dbc.themes.LITERA])
+app = dash.Dash(__name__, external_stylesheets=['https://codepen.io/chriddyp/pen/bWLwgP.css'])
 
 app.layout = html.Div(children=[
     html.H1(children='Homelessness Dash',
@@ -123,15 +124,13 @@ app.layout = html.Div(children=[
                    'font-weight': 'bold'}
             ),
     html.Div(children=[
-        html.Div(dcc.Graph(id="q7_bar", figure=q7_bar), style={'display': 'inline-block'}),
-        html.Div(dcc.Graph(id="q8_bar", figure=q8_bar), style={'display': 'inline-block'})
-        ],
-        className='row'),
+        html.Div([dcc.Graph(id="q7_bar", figure=q7_bar)], style={'display': 'inline-block'},className='four columns'),
+        html.Div([dcc.Graph(id="q8_bar", figure=q8_bar)], style={'display': 'inline-block'},className='four columns')
+        ],className='row'),
     html.Div(children=[
-        html.Div(dcc.Graph(id="q22_bar", figure=q22_bar),style={'display': 'inline-block'}),
-        html.Div(dcc.Graph(id="q23_bar", figure=q23_bar),style={'display': 'inline-block'})
-        ],
-        className='row')
+        html.Div([dcc.Graph(id="q22_bar", figure=q22_bar)],style={'display': 'inline-block'},className='four columns'),
+        html.Div([dcc.Graph(id="q23_bar", figure=q23_bar)],style={'display': 'inline-block'},className='four columns')
+        ],className='row')
 ])
 
 if __name__ == '__main__':
