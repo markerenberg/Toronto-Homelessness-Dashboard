@@ -20,13 +20,14 @@ from dash.dependencies import Input, Output
 
 
 # Get data files
-local_path = r'C:\Users\marke\Downloads\Datasets\Toronto_Homelessness'
-sna_export = pd.read_csv(local_path+r'\sna2018opendata_export.csv').fillna(0)
-sna_rows = pd.read_csv(local_path+r'\sna2018opendata_keyrows.csv')
-sna_cols = pd.read_csv(local_path+r'\sna2018opendata_keycolumns.csv')
-shelter_flow = pd.read_csv(local_path+r'\toronto-shelter-system-flow_march4.csv')
-occupancy_curr = pd.read_csv(local_path+r'\Daily_shelter_occupancy_current.csv')
-occupancy_2020 = pd.read_csv(local_path+r'\daily-shelter-occupancy-2020.csv')
+#local_path = r'C:\Users\marke\Downloads\Datasets\Toronto_Homelessness'
+local_path = r'/Users/merenberg/Desktop/dash-project/underlying_data'
+sna_export = pd.read_csv(local_path+r'/sna2018opendata_export.csv').fillna(0)
+sna_rows = pd.read_csv(local_path+r'/sna2018opendata_keyrows.csv')
+sna_cols = pd.read_csv(local_path+r'/sna2018opendata_keycolumns.csv')
+#shelter_flow = pd.read_csv(local_path+r'\toronto-shelter-system-flow_march4.csv')
+#occupancy_curr = pd.read_csv(local_path+r'\Daily_shelter_occupancy_current.csv')
+#occupancy_2020 = pd.read_csv(local_path+r'\daily-shelter-occupancy-2020.csv')
 
 ################### Street Needs Assessment ###################
 sna_export = sna_export.merge(sna_rows.iloc[:,:3],on='SNA RESPONSE CATEGORY')
@@ -44,6 +45,22 @@ sna_melt = sna_export.melt(id_vars=q_cols,value_vars=shelter_cols+dem_cols+['TOT
 # Track count/average responses
 avg_cols = [cat for cat in sna_melt['SNA RESPONSE CATEGORY'].unique() if ('AVERAGE' in cat)]
 cnt_cols = [cat for cat in sna_melt['SNA RESPONSE CATEGORY'].unique() if ('COUNT' in cat)]
+
+# Q1: Total Survey Count
+q1 = sna_melt.loc[sna_melt['SNA RESPONSE CATEGORY']=="TOTALSURVEYS",]
+q1_bar = px.bar(q1.loc[q1['GROUP'].isin(shelter_cols),].sort_values('COUNT',ascending=False),
+                x="GROUP",y="COUNT",text="COUNT",color="GROUP",
+                height=500,
+                labels=dict(GROUP="LOCATION"))
+q1_bar.update_layout(showlegend=False)
+#plotly.offline.plot(q1_bar)
+
+# Q2: People staying with you
+q2 = sna_melt.loc[sna_melt['QUESTION/CATEGORY DESCRIPTION']=="What family members are staying with you tonight?",]
+q2_pie = px.pie(q2.loc[(q2['RESPONSE'].notnull())&(q2['GROUP']=="TOTAL"),],
+                height=500,
+                values="COUNT",names="RESPONSE")
+#plotly.offline.plot(q2_pie)
 
 # Question 7: Have you stayed in an emergency shelter in the past 12 months?
 q7 = sna_melt.loc[(sna_melt['QUESTION/CATEGORY DESCRIPTION']=="Have you stayed in an emergency shelter in the past 12 months?")\
@@ -89,7 +106,7 @@ q23_bar = px.bar(q23.loc[q23['GROUP'].isin(shelter_cols),],\
                  text='COUNT')
 #plotly.offline.plot(q23_bar)
 
-################### Dash Layout ###################
+################### APP LAYOUT ###################
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 
 colors = {
@@ -116,7 +133,17 @@ app.layout = html.Div(children=[
                    'color': colors['text'],
                    'font-weight': 'bold'}
             ),
+    html.H6("The Streets Needs Assessment is a City-wide point-in-time count and survey of people experiencing homelessness in Toronto.",
+            style={'textAlign':'left'}),
     html.Br(),
+    html.Div([
+        html.Div(["On an arbitrary night in 2018, how many people were homeless in Toronto?",
+                  dcc.Graph(id="q1_bar",figure=q1_bar)],
+                  style={'textAlign':'center','width':'48%', 'display': 'inline-block'}),
+        html.Div(["Of those experiencing homelessness, what family members are staying with them??",
+                  dcc.Graph(id="q2_pie",figure=q2_pie)],
+                  style={'textAlign':'center','width':'48%', 'display': 'inline-block'})
+    ],className="row"),
     html.Div(['Select response type:',
                  dcc.Dropdown(id='resp_type',
                            options=[{'label': i, 'value': i} for i in ['Total','Location']],
@@ -131,6 +158,21 @@ app.layout = html.Div(children=[
         html.Div([dcc.Graph(id="q23_bar", figure=q23_bar)],style={'width':'48%', 'display': 'inline-block'})
         ],className='row')
 ])
+
+@app.callback(
+    Output("q2_pie","figure"),
+    Input("q1_bar","clickData"),
+    Input("q1_bar","selectedData")
+)
+def update_q2_pie(clickData,selectedData):
+    click_type = ["TOTAL"] if clickData==None else [clickData["points"][0]["x"]]
+    select_type = None if selectedData == None else [point["x"] for point in selectedData["points"]]
+    group_type = click_type if select_type == None else select_type
+    q2_pie = px.pie(q2.loc[(q2['RESPONSE'].notnull())&\
+                           (q2['GROUP'].isin(group_type)),],
+                    values="COUNT", names="RESPONSE",
+                    title="Family members - {}".format(",".join(group_type)))
+    return q2_pie
 
 @app.callback(
     Output('q7_bar','figure'),
