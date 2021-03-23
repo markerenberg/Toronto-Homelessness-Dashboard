@@ -77,16 +77,12 @@ q1_bar.add_trace(go.Bar(x=q1_dat['GROUP'],y=q1_dat['COUNT'],text=q1_dat['COUNT']
 q1_bar.add_trace(go.Scatter(x=q4_dat['GROUP'],y=q4_dat['COUNT'],text=q4_dat['COUNT'],
                             name='Avg Homeless Duration'),
                  secondary_y=True)
-#q1_bar.update_xaxes(title_text="Location")
 q1_bar.update_yaxes(title_text="Count", secondary_y=False,title_font={"size": 12})
 q1_bar.update_yaxes(title_text="Duration (Days)", secondary_y=True,title_font={"size": 12})
 q1_bar.update_layout(autosize=False,height=550,width=700,margin=dict(l=100),
                      legend=dict(orientation='h',yanchor="bottom",xanchor="right",
                                  y=1.02,x=1)
                      )
-
-
-
 
 # Q2: People staying with you
 q2 = sna_melt.loc[sna_melt['QUESTION/CATEGORY DESCRIPTION']=="What family members are staying with you tonight?",]
