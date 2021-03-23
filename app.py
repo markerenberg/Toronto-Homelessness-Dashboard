@@ -11,6 +11,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from bs4 import BeautifulSoup
 import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import plotly
 import dash
 import dash_core_components as dcc
@@ -48,12 +50,43 @@ cnt_cols = [cat for cat in sna_melt['SNA RESPONSE CATEGORY'].unique() if ('COUNT
 
 # Q1: Total Survey Count
 q1 = sna_melt.loc[sna_melt['SNA RESPONSE CATEGORY']=="TOTALSURVEYS",]
-q1_bar = px.bar(q1.loc[q1['GROUP'].isin(shelter_cols),].sort_values('COUNT',ascending=False),
-                x="GROUP",y="COUNT",text="COUNT",color="GROUP",
-                height=500,
-                labels=dict(GROUP="LOCATION"))
-q1_bar.update_layout(showlegend=False)
+#q1_bar = px.bar(q1.loc[q1['GROUP'].isin(shelter_cols),].sort_values('COUNT',ascending=False),
+#                x="GROUP",y="COUNT",text="COUNT",color="GROUP",
+#                height=500,
+#                labels=dict(GROUP="LOCATION"))
+#q1_bar.update_layout(showlegend=False)
 #plotly.offline.plot(q1_bar)
+
+# Q4: How much time (on avg) homeless in last 12 months
+q4 = sna_melt.loc[sna_melt['SNA RESPONSE CATEGORY']=="4_TIMEHOMELESSAVERAGE",]
+#q4_line = px.line(q4.loc[q4['GROUP'].isin(shelter_cols),],
+#                  x='GROUP',y='COUNT',text='COUNT')
+#plotly.offline.plot(q4_line)
+
+q1_dat = q1.loc[q1['GROUP'].isin(shelter_cols),].sort_values('COUNT',ascending=False)
+q1_sort_order = dict(zip(q1_dat['GROUP'],list(range(1,5))))
+q4_dat = q4.loc[q4['GROUP'].isin(shelter_cols),]
+q4_dat = q4_dat.iloc[q4_dat['GROUP'].map(q1_sort_order).argsort()]
+q1_bar = make_subplots(specs=[[{"secondary_y": True}]])
+q1_bar.add_trace(go.Bar(x=q1_dat['GROUP'],y=q1_dat['COUNT'],text=q1_dat['COUNT'],
+    textposition='outside',
+    #marker_color=dict(zip(q1_dat['GROUP'], plotly.colors.qualitative.Plotly[:len(q1_dat['GROUP'])])),
+    name='Homeless Count'),
+    secondary_y=False
+)
+q1_bar.add_trace(go.Scatter(x=q4_dat['GROUP'],y=q4_dat['COUNT'],text=q4_dat['COUNT'],
+                            name='Avg Homeless Duration'),
+                 secondary_y=True)
+#q1_bar.update_xaxes(title_text="Location")
+q1_bar.update_yaxes(title_text="Count", secondary_y=False,title_font={"size": 12})
+q1_bar.update_yaxes(title_text="Duration (Days)", secondary_y=True,title_font={"size": 12})
+q1_bar.update_layout(autosize=False,height=550,width=700,margin=dict(l=100),
+                     legend=dict(orientation='h',yanchor="bottom",xanchor="right",
+                                 y=1.02,x=1)
+                     )
+
+
+
 
 # Q2: People staying with you
 q2 = sna_melt.loc[sna_melt['QUESTION/CATEGORY DESCRIPTION']=="What family members are staying with you tonight?",]
@@ -170,8 +203,7 @@ def update_q2_pie(clickData,selectedData):
     group_type = click_type if select_type == None else select_type
     q2_pie = px.pie(q2.loc[(q2['RESPONSE'].notnull())&\
                            (q2['GROUP'].isin(group_type)),],
-                    values="COUNT", names="RESPONSE",
-                    title="Family members - {}".format(",".join(group_type)))
+                    values="COUNT", names="RESPONSE")
     return q2_pie
 
 @app.callback(
