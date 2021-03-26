@@ -79,7 +79,7 @@ q1_bar.add_trace(go.Scatter(x=q4_dat['GROUP'],y=q4_dat['COUNT'],text=q4_dat['COU
                  secondary_y=True)
 q1_bar.update_yaxes(title_text="Count", secondary_y=False,title_font={"size": 12})
 q1_bar.update_yaxes(title_text="Duration (Days)", secondary_y=True,title_font={"size": 12})
-q1_bar.update_layout(autosize=False,height=550,width=700,margin=dict(l=100),
+q1_bar.update_layout(autosize=False,height=550,width=750,margin=dict(l=100),
                      legend=dict(orientation='h',yanchor="bottom",xanchor="right",
                                  y=1.02,x=1)
                      )
@@ -90,6 +90,15 @@ q2_pie = px.pie(q2.loc[(q2['RESPONSE'].notnull())&(q2['GROUP']=="TOTAL"),],
                 height=500,
                 values="COUNT",names="RESPONSE")
 #plotly.offline.plot(q2_pie)
+
+# Q6: What happened that caused you to lose your housing most recently?
+q6 = sna_melt.loc[(sna_melt['QUESTION/CATEGORY DESCRIPTION']=="What happened that caused you to lose your housing most recently?")\
+                   &(sna_melt['RESPONSE'].notnull()) \
+                   &(sna_melt['RESPONSE']!="Other"),]
+q6_bar = px.bar(q6.loc[q6['GROUP'].isin(shelter_cols),].sort_values(by="COUNT",ascending=False),\
+                 x="RESPONSE", y="COUNT", color="GROUP", \
+                 text='COUNT')
+#plotly.offline.plot(q6_bar)
 
 # Question 7: Have you stayed in an emergency shelter in the past 12 months?
 q7 = sna_melt.loc[(sna_melt['QUESTION/CATEGORY DESCRIPTION']=="Have you stayed in an emergency shelter in the past 12 months?")\
@@ -113,7 +122,15 @@ q8_bar = px.bar(q8.loc[q8['GROUP'].isin(shelter_cols),],\
                  text='COUNT')
 #plotly.offline.plot(q8_bar)
 
-# Question 22: What would help you find housing?
+# Q19: Health conditions
+q19 = sna_melt.loc[(sna_melt['SNA RESPONSE CATEGORY'].str.contains("19_"))\
+                   &(sna_melt['RESPONSE']=='Yes'),].drop("RESPONSE",axis=1)
+q19['RESPONSE'] = q19['QUESTION/CATEGORY DESCRIPTION'].str[66:]
+q19_bar = px.bar(q19.loc[q19['GROUP'].isin(shelter_cols),].sort_values(by='COUNT',ascending=False),\
+                 x="RESPONSE", y="COUNT", color="GROUP",\
+                 text='COUNT')
+
+# Question 22: What would help you personally find housing?
 q22 = sna_melt.loc[(sna_melt['QUESTION/CATEGORY DESCRIPTION']=="Please tell me which ones would help you personally find housing.")\
                    &(~sna_melt['RESPONSE'].isin(["Don't know","Decline to answer"]))\
                    &(sna_melt['RESPONSE'].notnull()),]
@@ -129,10 +146,11 @@ q23 = sna_melt.loc[(sna_melt['QUESTION/CATEGORY DESCRIPTION'].str.contains("In t
                    &(sna_melt['RESPONSE']=='Yes'),].drop("RESPONSE",axis=1)
 q23['RESPONSE'] = q23['QUESTION/CATEGORY DESCRIPTION'].str[32:]
 
-q23_bar = px.bar(q23.loc[q23['GROUP'].isin(shelter_cols),],\
-                 x="RESPONSE", y="COUNT", color="GROUP", \
-                 title="In the past 6 months, you have:",\
+q23_bar = px.bar(q23.loc[q23['GROUP'].isin(shelter_cols),].sort_values(by='COUNT',ascending=False),\
+                 x="RESPONSE", y="COUNT", color="GROUP",\
                  text='COUNT')
+q23_bar.update_yaxes(title_text="Count", title_font={"size": 12})
+q23_bar.update_layout(autosize=False,height=550,width=700,margin=dict(l=100),showlegend=False)
 #plotly.offline.plot(q23_bar)
 
 ################### APP LAYOUT ###################
@@ -160,10 +178,11 @@ app.layout = html.Div(children=[
     html.H5(children='Street Needs Assessment: 2018 Results',
             style={'textAlign': 'left',
                    'color': colors['text'],
-                   'font-weight': 'bold'}
+                   'font-weight': 'bold',
+                   'text-indent':'20px'}
             ),
     html.H6("The Streets Needs Assessment is a City-wide point-in-time count and survey of people experiencing homelessness in Toronto.",
-            style={'textAlign':'left'}),
+            style={'textAlign':'left','text-indent':'20px'}),
     html.Br(),
     html.Div([
         html.Div(["On an arbitrary night in 2018, how many people were homeless in Toronto?",
@@ -173,78 +192,72 @@ app.layout = html.Div(children=[
                   dcc.Graph(id="q2_pie",figure=q2_pie)],
                   style={'textAlign':'center','width':'48%', 'display': 'inline-block'})
     ],className="row"),
-    html.Div(['Select response type:',
-                 dcc.Dropdown(id='resp_type',
-                           options=[{'label': i, 'value': i} for i in ['Total','Location']],
-                           value='Total')
-              ]),
-    html.Div(children=[
-        html.Div([dcc.Graph(id="q7_bar", figure=q7_bar)], style={'width':'48%', 'display': 'inline-block'}),
-        html.Div([dcc.Graph(id="q8_bar", figure=q8_bar)], style={'width':'48%', 'display': 'inline-block'})
-        ],className='row'),
-    html.Div(children=[
-        html.Div([dcc.Graph(id="q22_bar", figure=q22_bar)],style={'width':'48%', 'display': 'inline-block'}),
-        html.Div([dcc.Graph(id="q23_bar", figure=q23_bar)],style={'width':'48%', 'display': 'inline-block'})
-        ],className='row')
+    html.Br(),
+    html.Div([
+        html.Div(["In the past 6 months, have you:",
+                  dcc.Graph(id="q23_bar",figure=q23_bar)],
+                  style={'textAlign':'center','width':'48%', 'display': 'inline-block'}),
+        html.Div(["Do you identify as having any of the following health conditions:",
+                  dcc.Graph(id="q19_bar",figure=q19_bar)],
+                  style={'textAlign':'center','width':'48%', 'display': 'inline-block'})
+    ],className="row"),
+    html.Br(),
+    html.Div(["What happened that caused you to lose your housing most recently?",
+              dcc.Graph(id="q6_bar",figure=q6_bar)
+              ],
+             style={'textAlign':'center'}
+    ),
+    html.Br(),
+    html.Div(["What would help you personally find housing?",
+              dcc.Graph(id="q22_bar",figure=q22_bar)
+              ],
+             style={'textAlign':'center'}
+    )
 ])
 
 @app.callback(
     Output("q2_pie","figure"),
+    Output("q23_bar","figure"),
+    Output("q19_bar","figure"),
+    Output("q6_bar","figure"),
+    Output("q22_bar","figure"),
     Input("q1_bar","clickData"),
     Input("q1_bar","selectedData")
 )
-def update_q2_pie(clickData,selectedData):
+def update_group_in_figs(clickData,selectedData):
     click_type = ["TOTAL"] if clickData==None else [clickData["points"][0]["x"]]
     select_type = None if selectedData == None else [point["x"] for point in selectedData["points"]]
     group_type = click_type if select_type == None else select_type
     q2_pie = px.pie(q2.loc[(q2['RESPONSE'].notnull())&\
                            (q2['GROUP'].isin(group_type)),],
                     values="COUNT", names="RESPONSE")
-    return q2_pie
-
-@app.callback(
-    Output('q7_bar','figure'),
-    Output('q8_bar','figure'),
-    Output('q22_bar','figure'),
-    Output('q23_bar','figure'),
-    Input('resp_type','value')
-)
-def update_resp_type(resp_type):
-    # Manipulate Data
-    q7 = sna_melt.loc[(sna_melt['QUESTION/CATEGORY DESCRIPTION'] == "Have you stayed in an emergency shelter in the past 12 months?") \
-        & (~sna_melt['RESPONSE'].isin(["Don’t know", "Decline to answer"])) \
-        & (sna_melt['RESPONSE'].notnull()),]
-    q8 = sna_melt.loc[(sna_melt['QUESTION/CATEGORY DESCRIPTION'] == "Did you stay overnight at any of the following Winter Services this past winter?") \
-                      & (~sna_melt['RESPONSE'].isin(["Don’t know", "Decline to answer"])) \
-                      & (sna_melt['RESPONSE'].notnull()),]
-    q22 = sna_melt.loc[(sna_melt['QUESTION/CATEGORY DESCRIPTION'] == "Please tell me which ones would help you personally find housing.") \
-                       & (~sna_melt['RESPONSE'].isin(["Don't know", "Decline to answer"])) \
-                       & (sna_melt['RESPONSE'].notnull()),]
-    q23 = sna_melt.loc[(sna_melt['QUESTION/CATEGORY DESCRIPTION'].str.contains("In the past 6 months, have you")) \
-                       & (sna_melt['RESPONSE'] == 'Yes'),].drop("RESPONSE", axis=1)
-    q23['RESPONSE'] = q23['QUESTION/CATEGORY DESCRIPTION'].str[32:]
-    # Create plotly figures
-    q7_bar = px.bar(q7.loc[q7['GROUP'].isin(response_types[resp_type]),], \
-                    x="RESPONSE", y="COUNT", color='GROUP', \
-                    title="Have you stayed in an emergency shelter in the past 12 months?", \
-                    text='COUNT')
-    q8_bar = px.bar(q8.loc[q8['GROUP'].isin(response_types[resp_type]),], \
-                    x="RESPONSE", y="COUNT", color="GROUP", \
-                    title="Did you stay overnight at any Winter Services this past winter?", \
-                    text='COUNT')
-    q22_bar = px.bar(q22.loc[q22['GROUP'].isin(response_types[resp_type]),], \
+    q23_bar = px.bar(q23.loc[q23['GROUP'].isin(group_type),].sort_values(by='COUNT', ascending=False), \
                      x="RESPONSE", y="COUNT", color="GROUP", \
-                     title="What would help you personally find housing?", \
-                     text='COUNT',
-                     width=500,height=500)
-    q22_bar.update_xaxes(tickangle=45, tickfont=dict(color='black',size=8))
-    q22_bar.update_layout(autosize=False)
-    q23_bar = px.bar(q23.loc[q23['GROUP'].isin(response_types[resp_type]),], \
-                     x="RESPONSE", y="COUNT", color="GROUP", \
-                     title="In the past 6 months, you have:", \
                      text='COUNT')
+    q19_bar = px.bar(q19.loc[q19['GROUP'].isin(group_type),].sort_values(by='COUNT', ascending=False), \
+                     x="RESPONSE", y="COUNT", color="GROUP", \
+                     text='COUNT')
+    q6_bar = px.bar(q6.loc[q6['GROUP'].isin(group_type),].sort_values(by="COUNT", ascending=False), \
+                    x="RESPONSE", y="COUNT", color="GROUP", \
+                    text='COUNT')
+    q22_bar = px.bar(q22.loc[q22['GROUP'].isin(group_type),].sort_values(by="COUNT", ascending=False), \
+                    x="RESPONSE", y="COUNT", color="GROUP", \
+                    text='COUNT')
+    q23_bar.update_layout(margin=dict(l=100))
+    q23_bar.update_yaxes(title_text="Count", title_font={"size": 12})
+    q23_bar.update_xaxes(title_text="")
+    q23_bar.update_layout(autosize=False, height=550, width=800, margin=dict(l=100), showlegend=False)
+    q19_bar.update_yaxes(title_text="Count", title_font={"size": 12})
+    q19_bar.update_xaxes(title_text="")
+    q19_bar.update_layout(autosize=False, height=550, width=725, margin=dict(l=100), showlegend=False)
+    q6_bar.update_yaxes(title_text="Count", title_font={"size": 12})
+    q6_bar.update_xaxes(title_text="")
+    q6_bar.update_layout(autosize=False, height=550, margin=dict(l=100), showlegend=False)
+    q22_bar.update_yaxes(title_text="Count", title_font={"size": 12})
+    q22_bar.update_xaxes(title_text="")
+    q22_bar.update_layout(autosize=False, height=650, margin=dict(l=100), showlegend=False)
+    return q2_pie, q23_bar, q19_bar, q6_bar, q22_bar
 
-    return q7_bar, q8_bar, q22_bar, q23_bar
 
 if __name__ == '__main__':
     app.run_server(debug=True)
