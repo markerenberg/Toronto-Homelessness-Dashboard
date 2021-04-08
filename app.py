@@ -19,6 +19,8 @@ import dash_core_components as dcc
 import dash_html_components as html
 import dash_bootstrap_components as dbc
 from dash.dependencies import Input, Output
+import pgeocode
+import ssl
 
 
 # Get data files
@@ -29,7 +31,7 @@ sna_rows = pd.read_csv(local_path+r'/sna2018opendata_keyrows.csv')
 sna_cols = pd.read_csv(local_path+r'/sna2018opendata_keycolumns.csv')
 #shelter_flow = pd.read_csv(local_path+r'\toronto-shelter-system-flow_march4.csv')
 #occupancy_curr = pd.read_csv(local_path+r'\Daily_shelter_occupancy_current.csv')
-#occupancy_2020 = pd.read_csv(local_path+r'\daily-shelter-occupancy-2020.csv')
+occupancy = pd.read_csv(local_path+r'/daily-shelter-occupancy-2020.csv')
 
 ################### Street Needs Assessment ###################
 sna_export = sna_export.merge(sna_rows.iloc[:,:3],on='SNA RESPONSE CATEGORY')
@@ -153,7 +155,74 @@ q23_bar.update_yaxes(title_text="Count", title_font={"size": 12})
 q23_bar.update_layout(autosize=False,height=550,width=700,margin=dict(l=100),showlegend=False)
 #plotly.offline.plot(q23_bar)
 
-################### APP LAYOUT ###################
+
+################### Daily Shelter Occupancy ###################
+ssl._create_default_https_context = ssl._create_unverified_context
+nomi = pgeocode.Nominatim('ca')
+post_col = 'SHELTER_POSTAL_CODE'
+
+# Remove dashes from postal data, impute spaces if missing
+occupancy_ = occupancy.copy()
+occupancy[post_col] = occupancy[post_col].apply(lambda x: x.replace("-"," "))
+occupancy[post_col] = occupancy[post_col].apply(lambda x: x[:3] + " " + x[3:] if len(x)==6 else x)
+
+# Extract lat/long from postal codes
+unique_postal = occupancy[post_col].drop_duplicates().to_frame()
+unique_postal['LATITUDE'] = unique_postal[post_col].apply(lambda x: nomi.query_postal_code(x)['latitude'])
+unique_postal['LONGITUDE'] = unique_postal[post_col].apply(lambda x: nomi.query_postal_code(x)['longitude'])
+occupancy_ = occupancy_.merge(unique_postal,how='inner',on='SHELTER_POSTAL_CODE')
+
+# Create month,year columns
+occupancy_['MONTH'] = occupancy_['OCCUPANCY_DATE'].apply(lambda x: int(x[:2]))
+occupancy_['YEAR'] = occupancy_['OCCUPANCY_DATE'].apply(lambda x: int(x[6:]))
+
+# Group by location (postal) and month of occupancy
+occ_group = occupancy_.groupby(["MONTH","YEAR",post_col,'LATITUDE','LONGITUDE'])\
+                      .agg({'OCCUPANCY':'mean','CAPACITY':'mean'}).reset_index()
+
+# Example plot:
+map = go.Figure()
+
+map_dat = occ_group[occ_group['MONTH']==1]
+
+map.add_trace(go.Scattermapbox(
+        lat=map_dat['LATITUDE'],
+        lon=map_dat['LONGITUDE'],
+        mode='markers',
+        marker=go.scattermapbox.Marker(
+            size=6,
+            color='rgb(255, 0, 0)',
+            opacity=0.7
+        ),
+        text=map_dat[post_col],
+        hoverinfo='text')
+)
+'''
+map.update_layout(
+    title='Monthly',
+    autosize=True,
+    hovermode='closest',
+    showlegend=False,
+    mapbox=dict(
+        accesstoken=mapbox_access_token,
+        bearing=0,
+        center=dict(
+            lat=38,
+            lon=-94
+        ),
+        pitch=0,
+        zoom=3,
+        style='light'
+    ),
+)
+'''
+#map.show()
+plotly.offline.plot(map)
+
+
+##############################################################
+                    #     APP LAYOUT      #
+##############################################################
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 
 colors = {
