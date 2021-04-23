@@ -21,6 +21,7 @@ import dash_bootstrap_components as dbc
 from dash.dependencies import Input, Output
 import pgeocode
 import ssl
+import json
 
 
 # Get data files
@@ -160,6 +161,11 @@ q23_bar.update_layout(autosize=False,height=550,width=700,margin=dict(l=100),sho
 ssl._create_default_https_context = ssl._create_unverified_context
 nomi = pgeocode.Nominatim('ca')
 post_col = 'SHELTER_POSTAL_CODE'
+loc_cols = [post_col,'SHELTER_NAME','LATITUDE','LONGITUDE']
+month_dict = {1:"Jan",2:"Feb",3:"Mar",4:"Apr",5:"May",6:"Jun",7:"Jul",8:"Aug",9:"Sep",10:"Oct",11:"Nov",12:"Dec"}
+shelter_dict = [{'label':x, 'value':x} for x in occupancy['SHELTER_NAME'].drop_duplicates()]
+city_dict = [{'label':x, 'value':x} for x in occupancy['SHELTER_CITY'].drop_duplicates()]
+sector_dict = [{'label':x, 'value':x} for x in occupancy['SECTOR'].drop_duplicates()]
 
 # Remove dashes from postal data, impute spaces if missing
 occupancy_ = occupancy.copy()
@@ -174,51 +180,116 @@ occupancy_ = occupancy_.merge(unique_postal,how='inner',on='SHELTER_POSTAL_CODE'
 
 # Create month,year columns
 occupancy_['MONTH'] = occupancy_['OCCUPANCY_DATE'].apply(lambda x: int(x[:2]))
+occupancy_['MONTH_NAME'] = occupancy_['MONTH'].replace(month_dict,inplace=False)
 occupancy_['YEAR'] = occupancy_['OCCUPANCY_DATE'].apply(lambda x: int(x[6:]))
+#occupancy_ = occupancy_.sort_values(by='MONTH')
 
-# Group by location (postal) and month of occupancy
-occ_group = occupancy_.groupby(["MONTH","YEAR",post_col,'LATITUDE','LONGITUDE'])\
-                      .agg({'OCCUPANCY':'mean','CAPACITY':'mean'}).reset_index()
+# Group by date, take sum of occupancy/capacity
+occ_sums = occupancy_.groupby(["OCCUPANCY_DATE"]+loc_cols,as_index=False)\
+                     .agg({'OCCUPANCY':'sum','CAPACITY':'sum'})
+occ_sums['CAPACITY_PERC'] = occ_sums['OCCUPANCY']/occ_sums['CAPACITY']*100
+occ_sums['WEIGHTED_CAP'] = occ_sums['CAPACITY_PERC']*occ_sums['CAPACITY']
 
-# Example plot:
-map = go.Figure()
+# Group by location (postal) and take avg across month of occupancy
+map_dat = occ_sums.groupby(loc_cols,as_index=False)\
+                    .agg({'OCCUPANCY':'mean','CAPACITY':'mean','CAPACITY_PERC':'mean','WEIGHTED_CAP':'mean'})
 
-map_dat = occ_group[occ_group['MONTH']==1]
+# Need to scale bubble size
+scale = map_dat['CAPACITY'].max()
 
-map.add_trace(go.Scattermapbox(
+# SHELTER MAP PLOT
+shelter_map = go.Figure()
+mapbox_key = "pk.eyJ1IjoibWFya2VyZW5iZXJnIiwiYSI6ImNqd29oZ205azFybXk0OXA2MG93OXp1aGoifQ.fUo4sj9PExFysDzHwcr69Q"
+
+shelter_map.add_trace(go.Scattermapbox(
         lat=map_dat['LATITUDE'],
         lon=map_dat['LONGITUDE'],
         mode='markers',
         marker=go.scattermapbox.Marker(
-            size=6,
-            color='rgb(255, 0, 0)',
+            size=map_dat['CAPACITY']/scale*100,
+            color=map_dat['CAPACITY_PERC'],
+            colorscale=[[0, 'rgb(255,230,230)'], [1, 'rgb(255,0,0)']],
+            cmin=50,
+            cmax=100,
             opacity=0.7
         ),
-        text=map_dat[post_col],
-        hoverinfo='text')
+        text="Shelter Name: " + map_dat['SHELTER_NAME'].astype(str)\
+             + "<br><b>Avg Capacity (%): " + map_dat['CAPACITY_PERC'].astype(str)\
+            + "</b><br>Avg Occupancy: " + map_dat['OCCUPANCY'].astype(str),
+        hoverinfo='text',
+        hoverlabel= dict(bgcolor='white',\
+                         font=dict(color='black'))
+    )
 )
-'''
-map.update_layout(
-    title='Monthly',
+
+shelter_map.update_layout(
+    title="Shelter Capacity in Greater Toronto Area (2020)",
     autosize=True,
+    height=600,
+    width=1400,
     hovermode='closest',
     showlegend=False,
     mapbox=dict(
-        accesstoken=mapbox_access_token,
+        accesstoken=mapbox_key,
         bearing=0,
         center=dict(
-            lat=38,
-            lon=-94
+            lat=43.686820,
+            lon=-79.393590
         ),
         pitch=0,
-        zoom=3,
+        zoom=10,
         style='light'
     ),
 )
-'''
-#map.show()
-plotly.offline.plot(map)
+#plotly.offline.plot(shelter_map)
 
+# SHELTER TREND PLOTS
+sec_trend = occupancy_.groupby(["MONTH","MONTH_NAME","SECTOR"],as_index=False)\
+                     .agg({'OCCUPANCY':'sum','CAPACITY':'sum'})
+sec_trend['CAPACITY_PERC'] = sec_trend['OCCUPANCY']/sec_trend['CAPACITY']*100
+sec_trend['WEIGHTED_CAP'] = sec_trend['CAPACITY_PERC']*sec_trend['CAPACITY']
+sec_trend = sec_trend.sort_values(by='MONTH')
+sh_trend = occupancy_.groupby(["MONTH","MONTH_NAME"]+loc_cols,as_index=False)\
+                     .agg({'OCCUPANCY':'sum','CAPACITY':'sum'})
+sh_trend['CAPACITY_PERC'] = sh_trend['OCCUPANCY']/sh_trend['CAPACITY']*100
+sh_trend['WEIGHTED_CAP'] = sh_trend['CAPACITY_PERC']*sh_trend['CAPACITY']
+sh_trend = sh_trend.sort_values(by='MONTH')
+
+sec_trend_fig = px.line(sec_trend,x='MONTH',y='CAPACITY_PERC',color='SECTOR',
+                        line_shape='spline',
+                        range_y=[np.min(sec_trend['CAPACITY_PERC'])-5,np.max(sec_trend['CAPACITY_PERC'])+5],
+                        title='Shelter Capacity By Sector')
+sec_trend_fig.update_xaxes(title_text='Month',
+                           ticktext=sec_trend['MONTH_NAME'],
+                           tickvals=sec_trend['MONTH'])
+sec_trend_fig.update_yaxes(title_text='Shelter Capacity (%)')
+sec_trend_fig.update_layout(showlegend=False,
+                            legend=dict(
+                            yanchor="top",y=0.99,
+                            xanchor="left",x=0.01))
+#plotly.offline.plot(sec_trend_fig)
+
+sh_trend_fig = px.line(sh_trend,x='MONTH',y='CAPACITY_PERC',color='SHELTER_NAME',
+                    line_shape='spline',
+                    range_y=[np.min(sh_trend['CAPACITY_PERC'])-5,np.max(sh_trend['CAPACITY_PERC'])+5],
+                    title='Shelter Capacity By Shelter')
+sh_trend_fig.update_xaxes(title_text='Month',
+                          ticktext=sh_trend['MONTH_NAME'],
+                          tickvals=sh_trend['MONTH'])
+sec_trend_fig.update_yaxes(title_text='Shelter Capacity (%)')
+sh_trend_fig.update_layout(showlegend=False)
+#plotly.offline.plot(sh_trend_fig)
+
+
+# Helper function to find shelter name using lat/lon
+def find_shelter(point):
+    '''
+    takes in JSON dump from map selectedData and returns shelter name
+    :param point: dictionary of plotly map point, including lat/lon coordinates
+    :return: string shelter_name
+    '''
+    text = point['text']
+    return text[(text.find("Shelter Name: ")+len("Shelter Name: ")):text.find("<br>")]
 
 ##############################################################
                     #     APP LAYOUT      #
@@ -243,6 +314,43 @@ app.layout = html.Div(children=[
     html.H1(children='Homelessness Dash',
             style={'textAlign': 'center','color': colors['text']}
             ),
+    html.Br(),
+    html.H5(children='Toronto Shelter Occupancy Data',
+            style={'textAlign': 'left',
+                   'color': colors['text'],
+                   'font-weight': 'bold',
+                   'text-indent': '20px'}
+            ),
+    html.H6(
+        "Public data on the monthly occupancy and capacity of Toronto’s shelter system",
+        style={'textAlign': 'left', 'text-indent': '20px'}),
+    html.Br(),
+    html.Div([
+        html.Div(["Filter By Time:",
+              dcc.RangeSlider(id="shelter_year",min=1,max=12,step=1,value=[1,12],
+                              marks=month_dict)],
+        style={'textAlign':'left','float':'left','text-indent':'40px','display': 'inline-block','width':'49%'}),
+        html.Div(["Filter By Sector:",
+                 dcc.Checklist(id="sector",
+                           options=sector_dict,
+                           value=[sh for sh in occupancy['SECTOR'].drop_duplicates()])],
+        style={'textAlign':'left','float':'right','text-indent':'40px','display': 'inline-block','width':'49%'})],
+        style={'borderBottom': 'thin lightgrey solid',
+        'backgroundColor': 'rgb(250, 250, 250)'},
+        className="row"),
+    html.Div([dcc.Graph(id="shelter_map",figure=shelter_map)],
+             style={'textAlign':'center'}),
+    # Test Pre just to see selection output
+    html.Div([
+        dcc.Markdown("Selection Data"),
+        html.Pre(id='selected-data'),
+    ]),
+    html.Div([
+        html.Div([dcc.Graph(id="sector_trend",figure=sec_trend_fig)],
+                  style={'textAlign':'center','width':'48%','height':'400','text-indent':'10px','display': 'inline-block'}),
+        html.Div([dcc.Graph(id="shelter_trend",figure=sh_trend_fig)],
+                  style={'textAlign':'center','width':'48%','height':'400','text-indent':'10px', 'display': 'inline-block'})
+    ],className="row"),
     html.Br(),
     html.H5(children='Street Needs Assessment: 2018 Results',
             style={'textAlign': 'left',
@@ -291,9 +399,10 @@ app.layout = html.Div(children=[
     Output("q6_bar","figure"),
     Output("q22_bar","figure"),
     Input("q1_bar","clickData"),
-    Input("q1_bar","selectedData")
+    Input("q1_bar","selectedData"),
 )
-def update_group_in_figs(clickData,selectedData):
+def update_street_needs(clickData,selectedData):
+    # STREET NEEDS
     click_type = ["TOTAL"] if clickData==None else [clickData["points"][0]["x"]]
     select_type = None if selectedData == None else [point["x"] for point in selectedData["points"]]
     group_type = click_type if select_type == None else select_type
@@ -326,6 +435,110 @@ def update_group_in_figs(clickData,selectedData):
     q22_bar.update_xaxes(title_text="")
     q22_bar.update_layout(autosize=False, height=650, margin=dict(l=100), showlegend=False)
     return q2_pie, q23_bar, q19_bar, q6_bar, q22_bar
+
+@app.callback(
+    Output("selected-data","children"),
+    Output("shelter_map", "figure"),
+    Input("shelter_year", "value"),
+    Input("sector", "value")
+)
+def update_shelter_map(shelter_year,sector):
+    # Shelter Occupancy Map
+    months_to_use = list(month_dict.keys()) if shelter_year == None else list(month_dict.keys())[(shelter_year[0] - 1):shelter_year[-1]]
+    #months_to_use = list(month_dict.keys())
+    occ_sums = occupancy_[occupancy_['MONTH'].isin(months_to_use) & \
+                          occupancy_['SECTOR'].isin(sector)] \
+        .groupby(["OCCUPANCY_DATE"] + loc_cols, as_index=False) \
+        .agg({'OCCUPANCY': 'sum', 'CAPACITY': 'sum'})
+    occ_sums['CAPACITY_PERC'] = occ_sums['OCCUPANCY'] / occ_sums['CAPACITY'] * 100
+    occ_sums['WEIGHTED_CAP'] = occ_sums['CAPACITY_PERC'] * occ_sums['CAPACITY']
+    map_dat = occ_sums.groupby(loc_cols, as_index=False) \
+        .agg({'OCCUPANCY': 'mean', 'CAPACITY': 'mean', 'CAPACITY_PERC': 'mean', 'WEIGHTED_CAP': 'mean'})
+    scale = map_dat['CAPACITY'].max()
+    shelter_map = go.Figure()
+    shelter_map.add_trace(go.Scattermapbox(
+        lat=map_dat['LATITUDE'],
+        lon=map_dat['LONGITUDE'],
+        mode='markers',
+        marker=go.scattermapbox.Marker(
+            size=map_dat['CAPACITY'] / scale * 50,
+            color=map_dat['CAPACITY_PERC'],
+            colorscale=[[0, 'rgb(255,230,230)'], [1, 'rgb(255,0,0)']],
+            cmin=50,
+            cmax=100,
+            opacity=0.7
+        ),
+        text="Shelter Name: " + map_dat['SHELTER_NAME'].astype(str) \
+             + "<br><b>Avg Capacity (%): " + map_dat['CAPACITY_PERC'].astype(str) \
+             + "</b><br>Avg Occupancy: " + map_dat['OCCUPANCY'].astype(str),
+        hoverinfo='text',
+        hoverlabel=dict(bgcolor='white', font=dict(color='black'))
+    ))
+    shelter_map.update_layout(
+        title="Shelter Capacity in Greater Toronto Area (2020)",
+        autosize=True,
+        height=600,
+        width=1400,
+        hovermode='closest',
+        showlegend=False,
+        mapbox=dict(
+            accesstoken=mapbox_key,
+            bearing=0,
+            center=dict(lat=43.686820, lon=-79.393590),
+            pitch=0,
+            zoom=10,
+            style='light'
+        ),
+    )
+
+    return str(months_to_use), shelter_map
+
+@app.callback(
+    Output("sector_trend", "figure"),
+    Output("shelter_trend", "figure"),
+    Input("shelter_map", "selectedData"),
+    Input("shelter_year", "value"),
+    Input("sector", "value")
+)
+def update_shelter_trend(shelterPoints,shelter_year,sector):
+    shelter_names = None if shelterPoints == None else [find_shelter(point) for point in shelterPoints["points"]]
+    months_to_use = list(month_dict.keys()) if shelter_year == None else list(month_dict.keys())[(shelter_year[0] - 1):shelter_year[-1]]
+    # Trend Charts
+    sec_trend = occupancy_[occupancy_['MONTH'].isin(months_to_use) & \
+                           occupancy_['SHELTER_NAME'].isin(shelter_names) & \
+                           occupancy_['SECTOR'].isin(sector)] \
+        .groupby(["MONTH", "MONTH_NAME", "SECTOR"], as_index=False) \
+        .agg({'OCCUPANCY': 'sum', 'CAPACITY': 'sum'})
+    sec_trend['CAPACITY_PERC'] = sec_trend['OCCUPANCY'] / sec_trend['CAPACITY'] * 100
+    sec_trend['WEIGHTED_CAP'] = sec_trend['CAPACITY_PERC'] * sec_trend['CAPACITY']
+    sec_trend = sec_trend.sort_values(by='MONTH')
+    sh_trend = occupancy_[occupancy_['MONTH'].isin(months_to_use) & \
+                          occupancy_['SHELTER_NAME'].isin(shelter_names) & \
+                          occupancy_['SECTOR'].isin(sector)] \
+        .groupby(["MONTH", "MONTH_NAME"] + loc_cols, as_index=False) \
+        .agg({'OCCUPANCY': 'sum', 'CAPACITY': 'sum'})
+    sh_trend['CAPACITY_PERC'] = sh_trend['OCCUPANCY'] / sh_trend['CAPACITY'] * 100
+    sh_trend['WEIGHTED_CAP'] = sh_trend['CAPACITY_PERC'] * sh_trend['CAPACITY']
+    sh_trend = sh_trend.sort_values(by='MONTH')
+    sector_trend = px.line(sec_trend, x='MONTH', y='CAPACITY_PERC', color='SECTOR',
+                           line_shape='spline',
+                           range_y=[np.min(sec_trend['CAPACITY_PERC']) - 5, np.max(sec_trend['CAPACITY_PERC']) + 5],
+                           title='Shelter Capacity By Sector')
+    sector_trend.update_xaxes(title_text='Month',
+                              ticktext=sec_trend['MONTH_NAME'],
+                              tickvals=sec_trend['MONTH'])
+    sector_trend.update_yaxes(title_text='Shelter Capacity (%)')
+    sector_trend.update_layout(showlegend=False)
+    shelter_trend = px.line(sh_trend, x='MONTH', y='CAPACITY_PERC', color='SHELTER_NAME',
+                            line_shape='spline',
+                            range_y=[np.min(sh_trend['CAPACITY_PERC']) - 5, np.max(sh_trend['CAPACITY_PERC']) + 5],
+                            title='Shelter Capacity By Shelter')
+    shelter_trend.update_xaxes(title_text='Month',
+                               ticktext=sh_trend['MONTH_NAME'],
+                               tickvals=sh_trend['MONTH'])
+    shelter_trend.update_yaxes(title_text='Shelter Capacity (%)')
+    shelter_trend.update_layout(showlegend=False)
+    return sector_trend,shelter_trend
 
 
 if __name__ == '__main__':
