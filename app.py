@@ -164,6 +164,8 @@ post_col = 'SHELTER_POSTAL_CODE'
 loc_cols = [post_col,'SHELTER_NAME','LATITUDE','LONGITUDE']
 month_dict = {1:"Jan",2:"Feb",3:"Mar",4:"Apr",5:"May",6:"Jun",7:"Jul",8:"Aug",9:"Sep",10:"Oct",11:"Nov",12:"Dec"}
 shelter_dict = [{'label':x, 'value':x} for x in occupancy['SHELTER_NAME'].drop_duplicates()]
+all_shelters = occupancy['SHELTER_NAME'].drop_duplicates().to_list()
+all_sectors = occupancy['SECTOR'].drop_duplicates().to_list()
 city_dict = [{'label':x, 'value':x} for x in occupancy['SHELTER_CITY'].drop_duplicates()]
 sector_dict = [{'label':x, 'value':x} for x in occupancy['SECTOR'].drop_duplicates()]
 
@@ -258,12 +260,12 @@ sh_trend = sh_trend.sort_values(by='MONTH')
 sec_trend_fig = px.line(sec_trend,x='MONTH',y='CAPACITY_PERC',color='SECTOR',
                         line_shape='spline',
                         range_y=[np.min(sec_trend['CAPACITY_PERC'])-5,np.max(sec_trend['CAPACITY_PERC'])+5],
-                        title='Shelter Capacity By Sector')
+                        title='Shelter Capacity By Sector (2020)')
 sec_trend_fig.update_xaxes(title_text='Month',
                            ticktext=sec_trend['MONTH_NAME'],
                            tickvals=sec_trend['MONTH'])
 sec_trend_fig.update_yaxes(title_text='Shelter Capacity (%)')
-sec_trend_fig.update_layout(showlegend=False,
+sec_trend_fig.update_layout(title_x=0.5,showlegend=False,
                             legend=dict(
                             yanchor="top",y=0.99,
                             xanchor="left",x=0.01))
@@ -272,12 +274,12 @@ sec_trend_fig.update_layout(showlegend=False,
 sh_trend_fig = px.line(sh_trend,x='MONTH',y='CAPACITY_PERC',color='SHELTER_NAME',
                     line_shape='spline',
                     range_y=[np.min(sh_trend['CAPACITY_PERC'])-5,np.max(sh_trend['CAPACITY_PERC'])+5],
-                    title='Shelter Capacity By Shelter')
+                    title='Shelter Capacity By Shelter (2020)')
 sh_trend_fig.update_xaxes(title_text='Month',
                           ticktext=sh_trend['MONTH_NAME'],
                           tickvals=sh_trend['MONTH'])
 sec_trend_fig.update_yaxes(title_text='Shelter Capacity (%)')
-sh_trend_fig.update_layout(showlegend=False)
+sh_trend_fig.update_layout(title_x=0.5,showlegend=False)
 #plotly.offline.plot(sh_trend_fig)
 
 
@@ -341,10 +343,12 @@ app.layout = html.Div(children=[
     html.Div([dcc.Graph(id="shelter_map",figure=shelter_map)],
              style={'textAlign':'center'}),
     # Test Pre just to see selection output
-    html.Div([
-        dcc.Markdown("Selection Data"),
-        html.Pre(id='selected-data'),
-    ]),
+    #html.Div([
+    #    dcc.Markdown("Selection Data"),
+    #    html.Pre(id='selected-data'),
+    #    html.Pre(id='selected-data-2'),
+    #    html.Pre(id='selected-data-3')
+    #]),
     html.Div([
         html.Div([dcc.Graph(id="sector_trend",figure=sec_trend_fig)],
                   style={'textAlign':'center','width':'48%','height':'400','text-indent':'10px','display': 'inline-block'}),
@@ -437,7 +441,6 @@ def update_street_needs(clickData,selectedData):
     return q2_pie, q23_bar, q19_bar, q6_bar, q22_bar
 
 @app.callback(
-    Output("selected-data","children"),
     Output("shelter_map", "figure"),
     Input("shelter_year", "value"),
     Input("sector", "value")
@@ -491,21 +494,28 @@ def update_shelter_map(shelter_year,sector):
         ),
     )
 
-    return str(months_to_use), shelter_map
+    return shelter_map
 
 @app.callback(
     Output("sector_trend", "figure"),
     Output("shelter_trend", "figure"),
+    Input("shelter_map", "clickData"),
     Input("shelter_map", "selectedData"),
     Input("shelter_year", "value"),
     Input("sector", "value")
 )
-def update_shelter_trend(shelterPoints,shelter_year,sector):
-    shelter_names = None if shelterPoints == None else [find_shelter(point) for point in shelterPoints["points"]]
+def update_shelter_trend(shelterClick,shelterSelect,shelter_year,sector):
     months_to_use = list(month_dict.keys()) if shelter_year == None else list(month_dict.keys())[(shelter_year[0] - 1):shelter_year[-1]]
+    shelter_click = all_shelters if shelterClick == None else [find_shelter(point) for point in shelterClick["points"]]
+    shelter_select = all_shelters if shelterSelect == None else [find_shelter(point) for point in shelterSelect["points"]]
+    shelter_names = shelter_click if shelterSelect == None else shelter_select
+    last_copy = shelter_names.copy() if ((shelterClick != None) or (shelterSelect!=None)) else all_shelters
+    last_selection = last_copy if ((shelterClick == None) or (shelterSelect==None)) else shelter_names
+    selected_sector = occupancy_[occupancy_['SHELTER_NAME'].isin(last_selection)]['SECTOR'].drop_duplicates().to_list()
+    sector = list(set(sector+selected_sector)) if ((shelterClick != None) or (shelterSelect != None)) else all_sectors if len(sector)==0 else sector
     # Trend Charts
     sec_trend = occupancy_[occupancy_['MONTH'].isin(months_to_use) & \
-                           occupancy_['SHELTER_NAME'].isin(shelter_names) & \
+                           occupancy_['SHELTER_NAME'].isin(last_selection) & \
                            occupancy_['SECTOR'].isin(sector)] \
         .groupby(["MONTH", "MONTH_NAME", "SECTOR"], as_index=False) \
         .agg({'OCCUPANCY': 'sum', 'CAPACITY': 'sum'})
@@ -513,7 +523,7 @@ def update_shelter_trend(shelterPoints,shelter_year,sector):
     sec_trend['WEIGHTED_CAP'] = sec_trend['CAPACITY_PERC'] * sec_trend['CAPACITY']
     sec_trend = sec_trend.sort_values(by='MONTH')
     sh_trend = occupancy_[occupancy_['MONTH'].isin(months_to_use) & \
-                          occupancy_['SHELTER_NAME'].isin(shelter_names) & \
+                          occupancy_['SHELTER_NAME'].isin(last_selection) & \
                           occupancy_['SECTOR'].isin(sector)] \
         .groupby(["MONTH", "MONTH_NAME"] + loc_cols, as_index=False) \
         .agg({'OCCUPANCY': 'sum', 'CAPACITY': 'sum'})
@@ -523,21 +533,21 @@ def update_shelter_trend(shelterPoints,shelter_year,sector):
     sector_trend = px.line(sec_trend, x='MONTH', y='CAPACITY_PERC', color='SECTOR',
                            line_shape='spline',
                            range_y=[np.min(sec_trend['CAPACITY_PERC']) - 5, np.max(sec_trend['CAPACITY_PERC']) + 5],
-                           title='Shelter Capacity By Sector')
+                           title='Shelter Capacity By Sector (2020)')
     sector_trend.update_xaxes(title_text='Month',
                               ticktext=sec_trend['MONTH_NAME'],
                               tickvals=sec_trend['MONTH'])
     sector_trend.update_yaxes(title_text='Shelter Capacity (%)')
-    sector_trend.update_layout(showlegend=False)
+    sector_trend.update_layout(title_x=0.5,showlegend=False)
     shelter_trend = px.line(sh_trend, x='MONTH', y='CAPACITY_PERC', color='SHELTER_NAME',
                             line_shape='spline',
                             range_y=[np.min(sh_trend['CAPACITY_PERC']) - 5, np.max(sh_trend['CAPACITY_PERC']) + 5],
-                            title='Shelter Capacity By Shelter')
+                            title='Shelter Capacity By Shelter (2020)')
     shelter_trend.update_xaxes(title_text='Month',
                                ticktext=sh_trend['MONTH_NAME'],
                                tickvals=sh_trend['MONTH'])
     shelter_trend.update_yaxes(title_text='Shelter Capacity (%)')
-    shelter_trend.update_layout(showlegend=False)
+    shelter_trend.update_layout(title_x=0.5,showlegend=False)
     return sector_trend,shelter_trend
 
 
