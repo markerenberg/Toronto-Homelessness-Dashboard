@@ -25,14 +25,51 @@ import json
 
 
 # Get data files
-#local_path = r'C:\Users\marke\Downloads\Datasets\Toronto_Homelessness'
-local_path = r'/Users/merenberg/Desktop/dash-project/underlying_data'
-sna_export = pd.read_csv(local_path+r'/sna2018opendata_export.csv').fillna(0)
-sna_rows = pd.read_csv(local_path+r'/sna2018opendata_keyrows.csv')
-sna_cols = pd.read_csv(local_path+r'/sna2018opendata_keycolumns.csv')
-#shelter_flow = pd.read_csv(local_path+r'\toronto-shelter-system-flow_march4.csv')
+local_path = r'C:\Users\marke\Downloads\Datasets\Toronto_Homelessness'
+#local_path = r'/Users/merenberg/Desktop/dash-project/underlying_data'
+sna_export = pd.read_csv(local_path+r'\sna2018opendata_export.csv').fillna(0)
+sna_rows = pd.read_csv(local_path+r'\sna2018opendata_keyrows.csv')
+sna_cols = pd.read_csv(local_path+r'\sna2018opendata_keycolumns.csv')
+shelter_flow = pd.read_csv(local_path+r'\toronto-shelter-system-flow_may11.csv')
 #occupancy_curr = pd.read_csv(local_path+r'\Daily_shelter_occupancy_current.csv')
-occupancy = pd.read_csv(local_path+r'/daily-shelter-occupancy-2020.csv')
+occupancy = pd.read_csv(local_path+r'\daily-shelter-occupancy-2020.csv')
+
+
+################### Shelter System Flow ###################
+flow = shelter_flow.rename(columns={'date(mmm-yy)':'date'})
+month_dict = {1:"Jan",2:"Feb",3:"Mar",4:"Apr",5:"May",6:"Jun",7:"Jul",8:"Aug",9:"Sep",10:"Oct",11:"Nov",12:"Dec"}
+pop_groups = ['Chronic','Refugees','Families','Youth','Single Adult','Non-refugees']
+inflow = ['returned_from_housing','returned_to_shelter','newly_identified']
+outflow = ['moved_to_housing','no_recent_shelter_use']
+age_cols = [col for col in flow.columns if 'age' in col]
+gender_cols = [col for col in flow.columns if 'gender' in col]
+
+# Create month, year, datetime columns
+flow['month_name'] = flow['date'].apply(lambda st: st[:3])
+flow['month'] = flow['month_name'].replace(dict((y,x) for x,y in month_dict.items()),inplace=False)
+flow['month_str']=['0'+str(x) if len(str(x))!=2 else str(x) for x in flow.month]  # add leading zeroes
+flow['year'] = flow['date'].apply(lambda st: int(st[len(st)-2:]))
+flow['date_full'] = flow.apply(lambda row: '20'+str(row['year'])+row['month_str']+'01',axis=1)
+flow['datetime'] = flow['date_full'].apply(lambda x: pd.to_datetime(str(x), format='%Y%m%d'))
+date_cols = ['date','month','month_name','month_str','datetime','year']
+
+# Line graph of Actively Experiencing Homelessness
+actively = flow.loc[(flow['population_group'].isin(pop_groups+['All Population'])),\
+                    date_cols+['actively_homeless','population_group']]
+active_fig = px.line(actively,x="datetime",y="actively_homeless",color='population_group',\
+                     title='Population Actively Experiencing Homelessness')
+active_fig.update_xaxes(title_text='Month + Year',\
+                        ticktext=actively['date'],
+                        tickvals=actively['datetime'])
+active_fig.update_yaxes(title_text='Population Count')
+active_fig.update_layout(title_x=0.5,showlegend=True, \
+                         autosize=True,
+                         height=600,
+                         width=1400)
+active_fig.update_traces(mode='markers+lines')
+active_fig.update_traces(patch={"line": {"color": "black", "width": 4, "dash": 'dot'}}, selector={"legendgroup": "All Population"})
+#plotly.offline.plot(active_fig)
+
 
 ################### Street Needs Assessment ###################
 sna_export = sna_export.merge(sna_rows.iloc[:,:3],on='SNA RESPONSE CATEGORY')
@@ -316,6 +353,18 @@ app.layout = html.Div(children=[
     html.H1(children='Homelessness Dash',
             style={'textAlign': 'center','color': colors['text']}
             ),
+    html.Br(),
+    html.H5(children='Toronto Shelter System Flow Data',
+            style={'textAlign': 'left',
+                   'color': colors['text'],
+                   'font-weight': 'bold',
+                   'text-indent': '20px'}
+            ),
+    html.H6(
+        "Public data on the people experiencing homelessness who are entering/leaving the shelter system",
+        style={'textAlign': 'left', 'text-indent': '20px'}),
+    html.Div([dcc.Graph(id="active_line", figure=active_fig)],
+             style={'textAlign': 'center'}),
     html.Br(),
     html.H5(children='Toronto Shelter Occupancy Data',
             style={'textAlign': 'left',
