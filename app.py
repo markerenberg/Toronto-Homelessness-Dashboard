@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # ======== Dash App ======== #
 
 #import imports
@@ -25,14 +26,15 @@ import json
 
 
 # Get data files
-local_path = r'C:\Users\marke\Downloads\Datasets\Toronto_Homelessness'
-#local_path = r'/Users/merenberg/Desktop/dash-project/underlying_data'
-sna_export = pd.read_csv(local_path+r'\sna2018opendata_export.csv').fillna(0)
-sna_rows = pd.read_csv(local_path+r'\sna2018opendata_keyrows.csv')
-sna_cols = pd.read_csv(local_path+r'\sna2018opendata_keycolumns.csv')
-shelter_flow = pd.read_csv(local_path+r'\toronto-shelter-system-flow_may11.csv')
+#local_path = r'C:\Users\marke\Downloads\Datasets\Toronto_Homelessness'
+local_path = r'/Users/merenberg/Desktop/dash-project/underlying_data'
+sna_export = pd.read_csv(local_path+r'/sna2018opendata_export.csv').fillna(0)
+sna_rows = pd.read_csv(local_path+r'/sna2018opendata_keyrows.csv')
+sna_cols = pd.read_csv(local_path+r'/sna2018opendata_keycolumns.csv')
+#shelter_flow = pd.read_csv(local_path+r'/toronto-shelter-system-flow_may11.csv')
+shelter_flow = pd.read_csv(local_path+r'/toronto-shelter-system-flow_april27.csv')
 #occupancy_curr = pd.read_csv(local_path+r'\Daily_shelter_occupancy_current.csv')
-occupancy = pd.read_csv(local_path+r'\daily-shelter-occupancy-2020.csv')
+occupancy = pd.read_csv(local_path+r'/daily-shelter-occupancy-2020.csv')
 
 
 ################### Shelter System Flow ###################
@@ -58,7 +60,7 @@ actively = flow.loc[(flow['population_group'].isin(pop_groups+['All Population']
                     date_cols+['actively_homeless','population_group']]
 active_fig = px.line(actively,x="datetime",y="actively_homeless",color='population_group',\
                      title='Population Actively Experiencing Homelessness')
-active_fig.update_xaxes(title_text='Month + Year',\
+active_fig.update_xaxes(title_text='Time',\
                         ticktext=actively['date'],
                         tickvals=actively['datetime'])
 active_fig.update_yaxes(title_text='Population Count')
@@ -67,7 +69,7 @@ active_fig.update_layout(title_x=0.5,showlegend=True, \
                          height=600,
                          width=1400)
 active_fig.update_traces(mode='markers+lines')
-active_fig.update_traces(patch={"line": {"color": "black", "width": 4, "dash": 'dot'}}, selector={"legendgroup": "All Population"})
+active_fig.update_traces(patch={"line": {"color": "black", "width": 6, "dash": 'dot'}}, selector={"legendgroup": "All Population"})
 #plotly.offline.plot(active_fig)
 
 
@@ -141,9 +143,9 @@ q6_bar = px.bar(q6.loc[q6['GROUP'].isin(shelter_cols),].sort_values(by="COUNT",a
 #plotly.offline.plot(q6_bar)
 
 # Question 7: Have you stayed in an emergency shelter in the past 12 months?
-q7 = sna_melt.loc[(sna_melt['QUESTION/CATEGORY DESCRIPTION']=="Have you stayed in an emergency shelter in the past 12 months?")\
-                   &(~sna_melt['RESPONSE'].isin(["Don’t know","Decline to answer"]))\
-                   &(sna_melt['RESPONSE'].notnull()),]
+q7 = sna_melt.loc[(sna_melt['QUESTION/CATEGORY DESCRIPTION']=="Have you stayed in an emergency shelter in the past 12 months?")&\
+                  (~sna_melt['RESPONSE'].isin(["Don’t know","Decline to answer"]))&\
+                  (sna_melt['RESPONSE'].notnull()),]
 
 q7_bar = px.bar(q7.loc[q7['GROUP'].isin(shelter_cols),],\
                  x="RESPONSE", y="COUNT", color="GROUP", \
