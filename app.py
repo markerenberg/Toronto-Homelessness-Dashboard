@@ -25,18 +25,173 @@ import json
 
 
 # Get data files
-#local_path = r'C:\Users\marke\Downloads\Datasets\Toronto_Homelessness'
-local_path = r'/Users/merenberg/Desktop/dash-project/underlying_data'
-sna_export = pd.read_csv(local_path+r'/sna2018opendata_export.csv').fillna(0)
-sna_rows = pd.read_csv(local_path+r'/sna2018opendata_keyrows.csv')
-sna_cols = pd.read_csv(local_path+r'/sna2018opendata_keycolumns.csv')
-shelter_flow = pd.read_csv(local_path+r'/toronto-shelter-system-flow_april27.csv')
+local_path = r'C:\Users\marke\Downloads\Datasets\Toronto_Homelessness'
+#local_path = r'/Users/merenberg/Desktop/dash-project/underlying_data'
+sna_export = pd.read_csv(local_path+r'\sna2018opendata_export.csv').fillna(0)
+sna_rows = pd.read_csv(local_path+r'\sna2018opendata_keyrows.csv')
+sna_cols = pd.read_csv(local_path+r'\sna2018opendata_keycolumns.csv')
+shelter_flow = pd.read_csv(local_path+r'\toronto-shelter-system-flow_may11.csv')
 #occupancy_curr = pd.read_csv(local_path+r'\Daily_shelter_occupancy_current.csv')
-occupancy = pd.read_csv(local_path+r'/daily-shelter-occupancy-2020.csv')
+occupancy = pd.read_csv(local_path+r'\daily-shelter-occupancy-2020.csv')
+
 
 ################### Shelter System Flow ###################
-inflow = ['newly_identified','returned_from_housing','returned_to_shelter']
+flow = shelter_flow.rename(columns={'date(mmm-yy)':'date'})
+month_dict = {1:"Jan",2:"Feb",3:"Mar",4:"Apr",5:"May",6:"Jun",7:"Jul",8:"Aug",9:"Sep",10:"Oct",11:"Nov",12:"Dec"}
+pop_groups = ['Chronic','Refugees','Families','Youth','Single Adult','Non-refugees']
+inflow = ['returned_from_housing','returned_to_shelter','newly_identified']
 outflow = ['moved_to_housing','no_recent_shelter_use']
+age_cols = [col for col in flow.columns if 'age' in col]
+gender_cols = [col for col in flow.columns if 'gender' in col]
+
+# Create month, year, datetime columns
+flow['month_name'] = flow['date'].apply(lambda st: st[:3])
+flow['month'] = flow['month_name'].replace(dict((y,x) for x,y in month_dict.items()),inplace=False)
+flow['month_str']=['0'+str(x) if len(str(x))!=2 else str(x) for x in flow.month]  # add leading zeroes
+flow['year'] = flow['date'].apply(lambda st: int(st[len(st)-2:]))
+flow['date_full'] = flow.apply(lambda row: '20'+str(row['year'])+row['month_str']+'01',axis=1)
+flow['datetime'] = flow['date_full'].apply(lambda x: pd.to_datetime(str(x), format='%Y%m%d'))
+date_cols = ['date','month','month_name','month_str','datetime','year']
+
+# Line graph of Actively Experiencing Homelessness
+actively = flow.loc[(flow['population_group'].isin(pop_groups+['All Population'])),\
+                    date_cols+['actively_homeless','population_group']]
+active_fig = px.line(actively,x="datetime",y="actively_homeless",color='population_group',\
+                     title='Population Actively Experiencing Homelessness')
+active_fig.update_xaxes(title_text='Month + Year',\
+                        ticktext=actively['date'],
+                        tickvals=actively['datetime'])
+active_fig.update_yaxes(title_text='Population Count')
+active_fig.update_layout(title_x=0.5,showlegend=True, \
+                         autosize=True,
+                         height=600,
+                         width=1400)
+active_fig.update_traces(mode='markers+lines')
+active_fig.update_traces(patch={"line": {"color": "black", "width": 4, "dash": 'dot'}}, selector={"legendgroup": "All Population"})
+#plotly.offline.plot(active_fig)
+
+
+################### Street Needs Assessment ###################
+sna_export = sna_export.merge(sna_rows.iloc[:,:3],on='SNA RESPONSE CATEGORY')
+
+# Pivot on question-response
+q_cols = ['SNA RESPONSE CATEGORY','QUESTION/CATEGORY DESCRIPTION','RESPONSE']
+shelter_cols = ['OUTDOORS','CITY-ADMINISTERED SHELTERS','24-HR RESPITE','VAW SHELTERS']
+dem_cols = ['SINGLE ADULTS','FAMILY','YOUTH']
+total_cols = ['TOTAL']
+response_types = {'Total':total_cols,'Location':shelter_cols,'Demographic':dem_cols}
+
+sna_melt = sna_export.melt(id_vars=q_cols,value_vars=shelter_cols+dem_cols+['TOTAL'],
+                           var_name='GROUP',value_name='COUNT')
+
+# Track count/average responses
+avg_cols = [cat for cat in sna_melt['SNA RESPONSE CATEGORY'].unique() if ('AVERAGE' in cat)]
+cnt_cols = [cat for cat in sna_melt['SNA RESPONSE CATEGORY'].unique() if ('COUNT' in cat)]
+
+# Q1: Total Survey Count
+q1 = sna_melt.loc[sna_melt['SNA RESPONSE CATEGORY']=="TOTALSURVEYS",]
+#q1_bar = px.bar(q1.loc[q1['GROUP'].isin(shelter_cols),].sort_values('COUNT',ascending=False),
+#                x="GROUP",y="COUNT",text="COUNT",color="GROUP",
+#                height=500,
+#                labels=dict(GROUP="LOCATION"))
+#q1_bar.update_layout(showlegend=False)
+#plotly.offline.plot(q1_bar)
+
+# Q4: How much time (on avg) homeless in last 12 months
+q4 = sna_melt.loc[sna_melt['SNA RESPONSE CATEGORY']=="4_TIMEHOMELESSAVERAGE",]
+#q4_line = px.line(q4.loc[q4['GROUP'].isin(shelter_cols),],
+#                  x='GROUP',y='COUNT',text='COUNT')
+#plotly.offline.plot(q4_line)
+
+q1_dat = q1.loc[q1['GROUP'].isin(shelter_cols),].sort_values('COUNT',ascending=False)
+q1_sort_order = dict(zip(q1_dat['GROUP'],list(range(1,5))))
+q4_dat = q4.loc[q4['GROUP'].isin(shelter_cols),]
+q4_dat = q4_dat.iloc[q4_dat['GROUP'].map(q1_sort_order).argsort()]
+q1_bar = make_subplots(specs=[[{"secondary_y": True}]])
+q1_bar.add_trace(go.Bar(x=q1_dat['GROUP'],y=q1_dat['COUNT'],text=q1_dat['COUNT'],
+    textposition='outside',
+    #marker_color=dict(zip(q1_dat['GROUP'], plotly.colors.qualitative.Plotly[:len(q1_dat['GROUP'])])),
+    name='Homeless Count'),
+    secondary_y=False
+)
+q1_bar.add_trace(go.Scatter(x=q4_dat['GROUP'],y=q4_dat['COUNT'],text=q4_dat['COUNT'],
+                            name='Avg Homeless Duration'),
+                 secondary_y=True)
+q1_bar.update_yaxes(title_text="Count", secondary_y=False,title_font={"size": 12})
+q1_bar.update_yaxes(title_text="Duration (Days)", secondary_y=True,title_font={"size": 12})
+q1_bar.update_layout(autosize=False,height=550,width=750,margin=dict(l=100),
+                     legend=dict(orientation='h',yanchor="bottom",xanchor="right",
+                                 y=1.02,x=1)
+                     )
+
+# Q2: People staying with you
+q2 = sna_melt.loc[sna_melt['QUESTION/CATEGORY DESCRIPTION']=="What family members are staying with you tonight?",]
+q2_pie = px.pie(q2.loc[(q2['RESPONSE'].notnull())&(q2['GROUP']=="TOTAL"),],
+                height=500,
+                values="COUNT",names="RESPONSE")
+#plotly.offline.plot(q2_pie)
+
+# Q6: What happened that caused you to lose your housing most recently?
+q6 = sna_melt.loc[(sna_melt['QUESTION/CATEGORY DESCRIPTION']=="What happened that caused you to lose your housing most recently?")\
+                   &(sna_melt['RESPONSE'].notnull()) \
+                   &(sna_melt['RESPONSE']!="Other"),]
+q6_bar = px.bar(q6.loc[q6['GROUP'].isin(shelter_cols),].sort_values(by="COUNT",ascending=False),\
+                 x="RESPONSE", y="COUNT", color="GROUP", \
+                 text='COUNT')
+#plotly.offline.plot(q6_bar)
+
+# Question 7: Have you stayed in an emergency shelter in the past 12 months?
+q7 = sna_melt.loc[(sna_melt['QUESTION/CATEGORY DESCRIPTION']=="Have you stayed in an emergency shelter in the past 12 months?")\
+                   &(~sna_melt['RESPONSE'].isin(["Don’t know","Decline to answer"]))\
+                   &(sna_melt['RESPONSE'].notnull()),]
+
+q7_bar = px.bar(q7.loc[q7['GROUP'].isin(shelter_cols),],\
+                 x="RESPONSE", y="COUNT", color="GROUP", \
+                 title="Have you stayed in an emergency shelter in the past 12 months?",\
+                 text='COUNT')
+#plotly.offline.plot(q7_bar)
+
+# Question 8: Did you stay overnight at any Winter Services this past winter?
+q8 = sna_melt.loc[(sna_melt['QUESTION/CATEGORY DESCRIPTION']=="Did you stay overnight at any of the following Winter Services this past winter?")\
+                   &(~sna_melt['RESPONSE'].isin(["Don’t know","Decline to answer"]))\
+                   &(sna_melt['RESPONSE'].notnull()),]
+
+q8_bar = px.bar(q8.loc[q8['GROUP'].isin(shelter_cols),],\
+                 x="RESPONSE", y="COUNT", color="GROUP", \
+                 title="Did you stay overnight at any Winter Services this past winter?",\
+                 text='COUNT')
+#plotly.offline.plot(q8_bar)
+
+# Q19: Health conditions
+q19 = sna_melt.loc[(sna_melt['SNA RESPONSE CATEGORY'].str.contains("19_"))\
+                   &(sna_melt['RESPONSE']=='Yes'),].drop("RESPONSE",axis=1)
+q19['RESPONSE'] = q19['QUESTION/CATEGORY DESCRIPTION'].str[66:]
+q19_bar = px.bar(q19.loc[q19['GROUP'].isin(shelter_cols),].sort_values(by='COUNT',ascending=False),\
+                 x="RESPONSE", y="COUNT", color="GROUP",\
+                 text='COUNT')
+
+# Question 22: What would help you personally find housing?
+q22 = sna_melt.loc[(sna_melt['QUESTION/CATEGORY DESCRIPTION']=="Please tell me which ones would help you personally find housing.")\
+                   &(~sna_melt['RESPONSE'].isin(["Don't know","Decline to answer"]))\
+                   &(sna_melt['RESPONSE'].notnull()),]
+
+q22_bar = px.bar(q22.loc[q22['GROUP'].isin(shelter_cols),],\
+                 x="RESPONSE", y="COUNT", color="GROUP", \
+                 title="What would help you personally find housing?",\
+                 text='COUNT')
+#plotly.offline.plot(q22_bar)
+
+# Question 23: In the past 6 months, have you
+q23 = sna_melt.loc[(sna_melt['QUESTION/CATEGORY DESCRIPTION'].str.contains("In the past 6 months, have you"))\
+                   &(sna_melt['RESPONSE']=='Yes'),].drop("RESPONSE",axis=1)
+q23['RESPONSE'] = q23['QUESTION/CATEGORY DESCRIPTION'].str[32:]
+
+q23_bar = px.bar(q23.loc[q23['GROUP'].isin(shelter_cols),].sort_values(by='COUNT',ascending=False),\
+                 x="RESPONSE", y="COUNT", color="GROUP",\
+                 text='COUNT')
+q23_bar.update_yaxes(title_text="Count", title_font={"size": 12})
+q23_bar.update_layout(autosize=False,height=550,width=700,margin=dict(l=100),showlegend=False)
+#plotly.offline.plot(q23_bar)
 
 
 ################### Daily Shelter Occupancy ###################
@@ -175,129 +330,6 @@ def find_shelter(point):
     text = point['text']
     return text[(text.find("Shelter Name: ")+len("Shelter Name: ")):text.find("<br>")]
 
-################### Street Needs Assessment ###################
-sna_export = sna_export.merge(sna_rows.iloc[:,:3],on='SNA RESPONSE CATEGORY')
-
-# Pivot on question-response
-q_cols = ['SNA RESPONSE CATEGORY','QUESTION/CATEGORY DESCRIPTION','RESPONSE']
-shelter_cols = ['OUTDOORS','CITY-ADMINISTERED SHELTERS','24-HR RESPITE','VAW SHELTERS']
-dem_cols = ['SINGLE ADULTS','FAMILY','YOUTH']
-total_cols = ['TOTAL']
-response_types = {'Total':total_cols,'Location':shelter_cols,'Demographic':dem_cols}
-
-sna_melt = sna_export.melt(id_vars=q_cols,value_vars=shelter_cols+dem_cols+['TOTAL'],
-                           var_name='GROUP',value_name='COUNT')
-
-# Track count/average responses
-avg_cols = [cat for cat in sna_melt['SNA RESPONSE CATEGORY'].unique() if ('AVERAGE' in cat)]
-cnt_cols = [cat for cat in sna_melt['SNA RESPONSE CATEGORY'].unique() if ('COUNT' in cat)]
-
-# Q1: Total Survey Count
-q1 = sna_melt.loc[sna_melt['SNA RESPONSE CATEGORY']=="TOTALSURVEYS",]
-#q1_bar = px.bar(q1.loc[q1['GROUP'].isin(shelter_cols),].sort_values('COUNT',ascending=False),
-#                x="GROUP",y="COUNT",text="COUNT",color="GROUP",
-#                height=500,
-#                labels=dict(GROUP="LOCATION"))
-#q1_bar.update_layout(showlegend=False)
-#plotly.offline.plot(q1_bar)
-
-# Q4: How much time (on avg) homeless in last 12 months
-q4 = sna_melt.loc[sna_melt['SNA RESPONSE CATEGORY']=="4_TIMEHOMELESSAVERAGE",]
-#q4_line = px.line(q4.loc[q4['GROUP'].isin(shelter_cols),],
-#                  x='GROUP',y='COUNT',text='COUNT')
-#plotly.offline.plot(q4_line)
-
-q1_dat = q1.loc[q1['GROUP'].isin(shelter_cols),].sort_values('COUNT',ascending=False)
-q1_sort_order = dict(zip(q1_dat['GROUP'],list(range(1,5))))
-q4_dat = q4.loc[q4['GROUP'].isin(shelter_cols),]
-q4_dat = q4_dat.iloc[q4_dat['GROUP'].map(q1_sort_order).argsort()]
-q1_bar = make_subplots(specs=[[{"secondary_y": True}]])
-q1_bar.add_trace(go.Bar(x=q1_dat['GROUP'],y=q1_dat['COUNT'],text=q1_dat['COUNT'],
-    textposition='outside',
-    #marker_color=dict(zip(q1_dat['GROUP'], plotly.colors.qualitative.Plotly[:len(q1_dat['GROUP'])])),
-    name='Homeless Count'),
-    secondary_y=False
-)
-q1_bar.add_trace(go.Scatter(x=q4_dat['GROUP'],y=q4_dat['COUNT'],text=q4_dat['COUNT'],
-                            name='Avg Homeless Duration'),
-                 secondary_y=True)
-q1_bar.update_yaxes(title_text="Count", secondary_y=False,title_font={"size": 12})
-q1_bar.update_yaxes(title_text="Duration (Days)", secondary_y=True,title_font={"size": 12})
-q1_bar.update_layout(autosize=False,height=550,width=750,margin=dict(l=100),
-                     legend=dict(orientation='h',yanchor="bottom",xanchor="right",
-                                 y=1.02,x=1)
-                     )
-
-# Q2: People staying with you
-q2 = sna_melt.loc[sna_melt['QUESTION/CATEGORY DESCRIPTION']=="What family members are staying with you tonight?",]
-q2_pie = px.pie(q2.loc[(q2['RESPONSE'].notnull())&(q2['GROUP']=="TOTAL"),],
-                height=500,
-                values="COUNT",names="RESPONSE")
-#plotly.offline.plot(q2_pie)
-
-# Q6: What happened that caused you to lose your housing most recently?
-q6 = sna_melt.loc[(sna_melt['QUESTION/CATEGORY DESCRIPTION']=="What happened that caused you to lose your housing most recently?")\
-                   &(sna_melt['RESPONSE'].notnull()) \
-                   &(sna_melt['RESPONSE']!="Other"),]
-q6_bar = px.bar(q6.loc[q6['GROUP'].isin(shelter_cols),].sort_values(by="COUNT",ascending=False),\
-                 x="RESPONSE", y="COUNT", color="GROUP", \
-                 text='COUNT')
-#plotly.offline.plot(q6_bar)
-
-# Question 7: Have you stayed in an emergency shelter in the past 12 months?
-q7 = sna_melt.loc[(sna_melt['QUESTION/CATEGORY DESCRIPTION']=="Have you stayed in an emergency shelter in the past 12 months?")\
-                   &(~sna_melt['RESPONSE'].isin(["Don’t know","Decline to answer"]))\
-                   &(sna_melt['RESPONSE'].notnull()),]
-
-q7_bar = px.bar(q7.loc[q7['GROUP'].isin(shelter_cols),],\
-                 x="RESPONSE", y="COUNT", color="GROUP", \
-                 title="Have you stayed in an emergency shelter in the past 12 months?",\
-                 text='COUNT')
-#plotly.offline.plot(q7_bar)
-
-# Question 8: Did you stay overnight at any Winter Services this past winter?
-q8 = sna_melt.loc[(sna_melt['QUESTION/CATEGORY DESCRIPTION']=="Did you stay overnight at any of the following Winter Services this past winter?")\
-                   &(~sna_melt['RESPONSE'].isin(["Don’t know","Decline to answer"]))\
-                   &(sna_melt['RESPONSE'].notnull()),]
-
-q8_bar = px.bar(q8.loc[q8['GROUP'].isin(shelter_cols),],\
-                 x="RESPONSE", y="COUNT", color="GROUP", \
-                 title="Did you stay overnight at any Winter Services this past winter?",\
-                 text='COUNT')
-#plotly.offline.plot(q8_bar)
-
-# Q19: Health conditions
-q19 = sna_melt.loc[(sna_melt['SNA RESPONSE CATEGORY'].str.contains("19_"))\
-                   &(sna_melt['RESPONSE']=='Yes'),].drop("RESPONSE",axis=1)
-q19['RESPONSE'] = q19['QUESTION/CATEGORY DESCRIPTION'].str[66:]
-q19_bar = px.bar(q19.loc[q19['GROUP'].isin(shelter_cols),].sort_values(by='COUNT',ascending=False),\
-                 x="RESPONSE", y="COUNT", color="GROUP",\
-                 text='COUNT')
-
-# Question 22: What would help you personally find housing?
-q22 = sna_melt.loc[(sna_melt['QUESTION/CATEGORY DESCRIPTION']=="Please tell me which ones would help you personally find housing.")\
-                   &(~sna_melt['RESPONSE'].isin(["Don't know","Decline to answer"]))\
-                   &(sna_melt['RESPONSE'].notnull()),]
-
-q22_bar = px.bar(q22.loc[q22['GROUP'].isin(shelter_cols),],\
-                 x="RESPONSE", y="COUNT", color="GROUP", \
-                 title="What would help you personally find housing?",\
-                 text='COUNT')
-#plotly.offline.plot(q22_bar)
-
-# Question 23: In the past 6 months, have you
-q23 = sna_melt.loc[(sna_melt['QUESTION/CATEGORY DESCRIPTION'].str.contains("In the past 6 months, have you"))\
-                   &(sna_melt['RESPONSE']=='Yes'),].drop("RESPONSE",axis=1)
-q23['RESPONSE'] = q23['QUESTION/CATEGORY DESCRIPTION'].str[32:]
-
-q23_bar = px.bar(q23.loc[q23['GROUP'].isin(shelter_cols),].sort_values(by='COUNT',ascending=False),\
-                 x="RESPONSE", y="COUNT", color="GROUP",\
-                 text='COUNT')
-q23_bar.update_yaxes(title_text="Count", title_font={"size": 12})
-q23_bar.update_layout(autosize=False,height=550,width=700,margin=dict(l=100),showlegend=False)
-#plotly.offline.plot(q23_bar)
-
-
 ##############################################################
                     #     APP LAYOUT      #
 ##############################################################
@@ -321,6 +353,18 @@ app.layout = html.Div(children=[
     html.H1(children='Homelessness Dash',
             style={'textAlign': 'center','color': colors['text']}
             ),
+    html.Br(),
+    html.H5(children='Toronto Shelter System Flow Data',
+            style={'textAlign': 'left',
+                   'color': colors['text'],
+                   'font-weight': 'bold',
+                   'text-indent': '20px'}
+            ),
+    html.H6(
+        "Public data on the people experiencing homelessness who are entering/leaving the shelter system",
+        style={'textAlign': 'left', 'text-indent': '20px'}),
+    html.Div([dcc.Graph(id="active_line", figure=active_fig)],
+             style={'textAlign': 'center'}),
     html.Br(),
     html.H5(children='Toronto Shelter Occupancy Data',
             style={'textAlign': 'left',
