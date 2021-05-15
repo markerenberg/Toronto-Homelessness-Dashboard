@@ -59,7 +59,7 @@ date_cols = ['date','month','month_name','month_str','datetime','year']
 actively = flow.loc[(flow['population_group'].isin(pop_groups+['All Population'])),\
                     date_cols+['actively_homeless','population_group']]
 active_fig = px.line(actively,x="datetime",y="actively_homeless",color='population_group',\
-                     title='Population Actively Experiencing Homelessness')
+                     title='Population Actively Experiencing Homelessness In Toronto Shelters')
 active_fig.update_xaxes(title_text='Time',\
                         ticktext=actively['date'],
                         tickvals=actively['datetime'])
@@ -72,6 +72,21 @@ active_fig.update_traces(mode='markers+lines')
 active_fig.update_traces(patch={"line": {"color": "black", "width": 6, "dash": 'dot'}}, selector={"legendgroup": "All Population"})
 #plotly.offline.plot(active_fig)
 
+# Grouped bar plot to show inflow vs outflow
+all_population = flow.loc[flow['population_group']=='All Population',:]
+pop_melt = pd.melt(all_population,id_vars=date_cols+['population_group'],\
+                   value_vars=inflow+outflow,var_name='housing_status',value_name='count')
+pop_melt['flow_type'] = ['Inflow' if flow_type in inflow else 'Outflow' for flow_type in pop_melt['housing_status']]
+flow_fig = px.bar(pop_melt,x="datetime",y="count",barmode="group",\
+                  color="flow_type",title="Toronto Shelter System Inflow vs Outflow",
+                  hover_name="housing_status",hover_data=["housing_status","flow_type","count"],\
+                  labels={'flow_type': "Flow Type","datetime":"Time","count":"Population Count","housing_status":"Housing Status"},\
+                  color_discrete_map={'Inflow':'red','Outflow':'green'})
+flow_fig.update_layout(title_x=0.5,showlegend=True, \
+                         autosize=True,
+                         height=600,
+                         width=1400)
+#plotly.offline.plot(flow_fig)
 
 ################### Street Needs Assessment ###################
 sna_export = sna_export.merge(sna_rows.iloc[:,:3],on='SNA RESPONSE CATEGORY')
@@ -366,6 +381,8 @@ app.layout = html.Div(children=[
         "Public data on the people experiencing homelessness who are entering/leaving the shelter system",
         style={'textAlign': 'left', 'text-indent': '20px'}),
     html.Div([dcc.Graph(id="active_line", figure=active_fig)],
+             style={'textAlign': 'center'}),
+    html.Div([dcc.Graph(id="flowtype_chart", figure=flow_fig)],
              style={'textAlign': 'center'}),
     html.Br(),
     html.H5(children='Toronto Shelter Occupancy Data',
