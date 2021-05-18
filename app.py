@@ -43,7 +43,7 @@ month_dict = {1:"Jan",2:"Feb",3:"Mar",4:"Apr",5:"May",6:"Jun",7:"Jul",8:"Aug",9:
 pop_groups = ['Chronic','Refugees','Families','Youth','Single Adult','Non-refugees']
 inflow = ['returned_from_housing','returned_to_shelter','newly_identified']
 outflow = ['moved_to_housing','no_recent_shelter_use']
-age_cols = [col for col in flow.columns if 'age' in col]
+age_cols = [col for col in flow.columns if 'age' in col and col != 'population_group_percentage']
 gender_cols = [col for col in flow.columns if 'gender' in col]
 
 # Create month, year, datetime columns
@@ -87,6 +87,42 @@ flow_fig.update_layout(title_x=0.5,showlegend=True, \
                          height=600,
                          width=1400)
 #plotly.offline.plot(flow_fig)
+
+# Line plot of shelter flow by age
+age_melt = pd.melt(all_population,id_vars=date_cols+['population_group'],\
+                   value_vars=age_cols,var_name='age_group',value_name='count')
+age_fig = px.line(age_melt,x="datetime",y="count",color='age_group',\
+                     title='Active Shelter Population By Age Demographic',\
+                     labels={'age_group': "Age Demographic","datetime":"Time","count":"Population Count"})
+age_fig.update_xaxes(title_text='Time',\
+                        ticktext=age_melt['date'],
+                        tickvals=age_melt['datetime'])
+age_fig.update_yaxes(title_text='Population Count')
+age_fig.update_layout(title_x=0.5,showlegend=True, autosize=True,width=600,\
+                      legend=dict(orientation="h",yanchor="bottom",xanchor="left",title='',\
+                                  y=1.02,x=0.01),\
+                      margin=dict(l=100))
+age_fig.update_traces(mode='markers+lines')
+#plotly.offline.plot(age_fig)
+
+# Line plot of shelter flow by gender
+gend_melt = pd.melt(all_population,id_vars=date_cols+['population_group'],\
+                   value_vars=gender_cols,var_name='gender_group',value_name='count')
+gend_melt.loc[gend_melt['gender_group']=="gender_transgender,non-binary_or_two_spirit","gender_group"]="gender_transgender"
+gend_fig = px.line(gend_melt,x="datetime",y="count",color='gender_group',\
+                     title='Active Shelter Population By Gender Demographic',\
+                     labels={'gender_group': "Gender Demographic","datetime":"Time","count":"Population Count"})
+gend_fig.update_xaxes(title_text='Time',\
+                        ticktext=gend_melt['date'],
+                        tickvals=gend_melt['datetime'])
+gend_fig.update_yaxes(title_text='Population Count')
+gend_fig.update_layout(title_x=0.5,showlegend=True, autosize=True, \
+                       legend=dict(orientation="h", yanchor="bottom", xanchor="left", title='', \
+                                   y=1.02, x=0.01),\
+                       margin=dict(l=100))
+gend_fig.update_traces(mode='markers+lines')
+#plotly.offline.plot(gend_fig)
+
 
 ################### Street Needs Assessment ###################
 sna_export = sna_export.merge(sna_rows.iloc[:,:3],on='SNA RESPONSE CATEGORY')
@@ -384,6 +420,13 @@ app.layout = html.Div(children=[
              style={'textAlign': 'center'}),
     html.Div([dcc.Graph(id="flowtype_chart", figure=flow_fig)],
              style={'textAlign': 'center'}),
+    html.Br(),
+    html.Div([
+        html.Div([dcc.Graph(id="age_line",figure=age_fig)],
+                  style={'textAlign':'center','width':'50%','height':'600','display': 'inline-block'}),
+        html.Div([dcc.Graph(id="gender_line",figure=gend_fig)],
+                  style={'textAlign':'center','width':'50%','height':'600', 'display': 'inline-block'})
+    ],className="row"),
     html.Br(),
     html.H5(children='Toronto Shelter Occupancy Data',
             style={'textAlign': 'left',
