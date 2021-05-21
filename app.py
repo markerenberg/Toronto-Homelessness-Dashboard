@@ -3,14 +3,9 @@
 
 #import imports
 
-import os
-import time
+
 import numpy as np
 import pandas as pd
-import requests
-import matplotlib.pyplot as plt
-import seaborn as sns
-from bs4 import BeautifulSoup
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -22,7 +17,7 @@ import dash_bootstrap_components as dbc
 from dash.dependencies import Input, Output
 import pgeocode
 import ssl
-import json
+
 
 
 # Get data files
@@ -191,6 +186,7 @@ q6 = sna_melt.loc[(sna_melt['QUESTION/CATEGORY DESCRIPTION']=="What happened tha
 q6_bar = px.bar(q6.loc[q6['GROUP'].isin(shelter_cols),].sort_values(by="COUNT",ascending=False),\
                  x="RESPONSE", y="COUNT", color="GROUP", \
                  text='COUNT')
+q6_bar.update_traces(marker_color='darkorange')
 #plotly.offline.plot(q6_bar)
 
 # Question 7: Have you stayed in an emergency shelter in the past 12 months?
@@ -222,6 +218,7 @@ q19['RESPONSE'] = q19['QUESTION/CATEGORY DESCRIPTION'].str[66:]
 q19_bar = px.bar(q19.loc[q19['GROUP'].isin(shelter_cols),].sort_values(by='COUNT',ascending=False),\
                  x="RESPONSE", y="COUNT", color="GROUP",\
                  text='COUNT')
+q19_bar.update_traces(marker_color='sienna')
 
 # Question 22: What would help you personally find housing?
 q22 = sna_melt.loc[(sna_melt['QUESTION/CATEGORY DESCRIPTION']=="Please tell me which ones would help you personally find housing.")\
@@ -232,6 +229,7 @@ q22_bar = px.bar(q22.loc[q22['GROUP'].isin(shelter_cols),],\
                  x="RESPONSE", y="COUNT", color="GROUP", \
                  title="What would help you personally find housing?",\
                  text='COUNT')
+q22_bar.update_traces(marker_color='crimson')
 #plotly.offline.plot(q22_bar)
 
 # Question 23: In the past 6 months, have you
@@ -244,6 +242,7 @@ q23_bar = px.bar(q23.loc[q23['GROUP'].isin(shelter_cols),].sort_values(by='COUNT
                  text='COUNT')
 q23_bar.update_yaxes(title_text="Count", title_font={"size": 12})
 q23_bar.update_layout(autosize=False,height=550,width=700,margin=dict(l=100),showlegend=False)
+q23_bar.update_traces(marker_color='forestgreen')
 #plotly.offline.plot(q23_bar)
 
 
@@ -423,9 +422,9 @@ app.layout = html.Div(children=[
     html.Br(),
     html.Div([
         html.Div([dcc.Graph(id="age_line",figure=age_fig)],
-                  style={'textAlign':'center','width':'50%','height':'600','display': 'inline-block'}),
+                  style={'textAlign':'center','width':'52%','height':'600','display': 'inline-block'}),
         html.Div([dcc.Graph(id="gender_line",figure=gend_fig)],
-                  style={'textAlign':'center','width':'50%','height':'600', 'display': 'inline-block'})
+                  style={'textAlign':'center','width':'48%','height':'600', 'display': 'inline-block'})
     ],className="row"),
     html.Br(),
     html.H5(children='Toronto Shelter Occupancy Data',
@@ -540,15 +539,19 @@ def update_street_needs(clickData,selectedData):
     q23_bar.update_yaxes(title_text="Count", title_font={"size": 12})
     q23_bar.update_xaxes(title_text="")
     q23_bar.update_layout(autosize=False, height=550, width=800, margin=dict(l=100), showlegend=False)
+    q23_bar.update_traces(marker_color='forestgreen')
     q19_bar.update_yaxes(title_text="Count", title_font={"size": 12})
     q19_bar.update_xaxes(title_text="")
     q19_bar.update_layout(autosize=False, height=550, width=725, margin=dict(l=100), showlegend=False)
+    q19_bar.update_traces(marker_color='sienna')
     q6_bar.update_yaxes(title_text="Count", title_font={"size": 12})
     q6_bar.update_xaxes(title_text="")
     q6_bar.update_layout(autosize=False, height=550, margin=dict(l=100), showlegend=False)
+    q6_bar.update_traces(marker_color='darkorange')
     q22_bar.update_yaxes(title_text="Count", title_font={"size": 12})
     q22_bar.update_xaxes(title_text="")
     q22_bar.update_layout(autosize=False, height=650, margin=dict(l=100), showlegend=False)
+    q22_bar.update_traces(marker_color='crimson')
     return q2_pie, q23_bar, q19_bar, q6_bar, q22_bar
 
 @app.callback(
