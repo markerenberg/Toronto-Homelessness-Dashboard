@@ -79,7 +79,8 @@ pop_melt['flow_type'] = ['Inflow' if flow_type in inflow else 'Outflow' for flow
 flow_fig = px.bar(pop_melt,x="datetime",y="count",barmode="group",\
                   color="flow_type",title="Toronto Shelter System Inflow vs Outflow",
                   hover_name="housing_status",hover_data=["housing_status","flow_type","count"],\
-                  labels={'flow_type': "Flow Type","datetime":"Time","count":"Population Count","housing_status":"Housing Status"},\
+                  labels={'flow_type': "Flow Type", "housing_status": "Housing Status",\
+                              "population_group":"Population Group","datetime": "Time", "count": "Population Count"},\
                   color_discrete_map={'Inflow':'red','Outflow':'green'})
 flow_fig.update_layout(title_x=0.5,showlegend=True, \
                          autosize=True,
@@ -97,7 +98,7 @@ age_fig.update_xaxes(title_text='Time',\
                         ticktext=age_melt['date'],
                         tickvals=age_melt['datetime'])
 age_fig.update_yaxes(title_text='Population Count')
-age_fig.update_layout(title_x=0.5,showlegend=True, autosize=True,width=600,\
+age_fig.update_layout(title_x=0.5,showlegend=True, autosize=False,width=750,\
                       legend=dict(orientation="h",yanchor="bottom",xanchor="left",title='',\
                                   y=1.02,x=0.01),\
                       margin=dict(l=100))
@@ -115,7 +116,7 @@ gend_fig.update_xaxes(title_text='Time',\
                         ticktext=gend_melt['date'],
                         tickvals=gend_melt['datetime'])
 gend_fig.update_yaxes(title_text='Population Count')
-gend_fig.update_layout(title_x=0.5,showlegend=True, autosize=True, \
+gend_fig.update_layout(title_x=0.5,showlegend=True, autosize=False, \
                        legend=dict(orientation="h", yanchor="bottom", xanchor="left", title='', \
                                    y=1.02, x=0.01),\
                        margin=dict(l=100))
@@ -542,8 +543,9 @@ def update_flow_graphs(flow_year,flow_month,flow_group):
     active_chart_groups = pop_groups+["All Population"] if flow_group == None else flow_group+["All Population"]
 
     # Line graph of Actively Experiencing Homelessness
-    actively = flow.loc[(flow['population_group'].isin(active_chart_groups))&\
-                        (flow['month']), \
+    actively = flow.loc[(flow['population_group'].isin(active_chart_groups))& \
+                        (flow['month'].isin(months_to_use))& \
+                        (flow['year_full'].isin(years_to_use)), \
                         date_cols + ['actively_homeless', 'population_group']]
     active_fig = px.line(actively, x="datetime", y="actively_homeless", color='population_group', \
                          title='Population Actively Experiencing Homelessness In Toronto Shelters')
@@ -558,23 +560,63 @@ def update_flow_graphs(flow_year,flow_month,flow_group):
     active_fig.update_traces(mode='markers+lines',
                              patch={"line": {"color": "black", "width": 6, "dash": 'dot'}},
                              selector={"legendgroup": "All Population"})
+
     # Grouped bar plot to show inflow vs outflow
-    all_population = flow.loc[flow['population_group'] == 'All Population', :]
+    all_population = flow.loc[(flow['population_group'].isin(selected_groups))&\
+                              (flow['month'].isin(months_to_use))&\
+                              (flow['year_full'].isin(years_to_use)), :]
     pop_melt = pd.melt(all_population, id_vars=date_cols + ['population_group'], \
                        value_vars=inflow + outflow, var_name='housing_status', value_name='count')
     pop_melt['flow_type'] = ['Inflow' if flow_type in inflow else 'Outflow' for flow_type in pop_melt['housing_status']]
     flow_fig = px.bar(pop_melt, x="datetime", y="count", barmode="group", \
                       color="flow_type", title="Toronto Shelter System Inflow vs Outflow",
-                      hover_name="housing_status", hover_data=["housing_status", "flow_type", "count"], \
-                      labels={'flow_type': "Flow Type", "datetime": "Time", "count": "Population Count",
-                              "housing_status": "Housing Status"}, \
+                      hover_name="housing_status", hover_data=["housing_status","population_group","flow_type","count"], \
+                      labels={'flow_type': "Flow Type", "housing_status": "Housing Status",\
+                              "population_group":"Population Group","datetime": "Time", "count": "Population Count"}, \
                       color_discrete_map={'Inflow': 'red', 'Outflow': 'green'})
     flow_fig.update_layout(title_x=0.5, showlegend=True, \
                            autosize=True,
                            height=600,
                            width=1400)
-
-    return active_fig,flowtype_chart,age_line,gender_line
+    # Line plot of shelter flow by age
+    age_grouped = all_population.groupby(date_cols,as_index=False)\
+                                .agg({col:"sum" for col in age_cols})\
+                                .sort_values(by="datetime")
+    age_melt = pd.melt(age_grouped, id_vars=date_cols, \
+                       value_vars=age_cols, var_name='age_group', value_name='count')
+    age_fig = px.line(age_melt, x="datetime", y="count", color='age_group', \
+                      title='Active Shelter Population By Age Demographic', \
+                      labels={'age_group': "Age Demographic", "datetime": "Time", "count": "Population Count"})
+    age_fig.update_xaxes(title_text='Time', \
+                         ticktext=age_melt['date'],
+                         tickvals=age_melt['datetime'])
+    age_fig.update_yaxes(title_text='Population Count')
+    age_fig.update_layout(title_x=0.5, showlegend=True, autosize=False, width=750, \
+                          legend=dict(orientation="h", yanchor="bottom", xanchor="left", title='', \
+                                      y=1.02, x=0.01), \
+                          margin=dict(l=100))
+    age_fig.update_traces(mode='markers+lines')
+    # Line plot of shelter flow by gender
+    gend_grouped = all_population.groupby(date_cols, as_index=False) \
+                                .agg({col: "sum" for col in gender_cols}) \
+                                .sort_values(by="datetime")
+    gend_melt = pd.melt(gend_grouped, id_vars=date_cols, \
+                        value_vars=gender_cols, var_name='gender_group', value_name='count')
+    gend_melt.loc[gend_melt[
+                      'gender_group'] == "gender_transgender,non-binary_or_two_spirit", "gender_group"] = "gender_transgender"
+    gend_fig = px.line(gend_melt, x="datetime", y="count", color='gender_group', \
+                       title='Active Shelter Population By Gender Demographic', \
+                       labels={'gender_group': "Gender Demographic", "datetime": "Time", "count": "Population Count"})
+    gend_fig.update_xaxes(title_text='Time', \
+                          ticktext=gend_melt['date'],
+                          tickvals=gend_melt['datetime'])
+    gend_fig.update_yaxes(title_text='Population Count')
+    gend_fig.update_layout(title_x=0.5, showlegend=True, autosize=False, \
+                           legend=dict(orientation="h", yanchor="bottom", xanchor="left", title='', \
+                                       y=1.02, x=0.01), \
+                           margin=dict(l=100))
+    gend_fig.update_traces(mode='markers+lines')
+    return active_fig, flow_fig, age_fig, gend_fig
 
 @app.callback(
     Output("q2_pie","figure"),
