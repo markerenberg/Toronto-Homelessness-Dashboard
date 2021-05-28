@@ -46,9 +46,13 @@ flow['month_name'] = flow['date'].apply(lambda st: st[:3])
 flow['month'] = flow['month_name'].replace(dict((y,x) for x,y in month_dict.items()),inplace=False)
 flow['month_str']=['0'+str(x) if len(str(x))!=2 else str(x) for x in flow.month]  # add leading zeroes
 flow['year'] = flow['date'].apply(lambda st: int(st[len(st)-2:]))
+flow['year_full'] = flow['year'].apply(lambda yr: yr+2000)
 flow['date_full'] = flow.apply(lambda row: '20'+str(row['year'])+row['month_str']+'01',axis=1)
 flow['datetime'] = flow['date_full'].apply(lambda x: pd.to_datetime(str(x), format='%Y%m%d'))
-date_cols = ['date','month','month_name','month_str','datetime','year']
+date_cols = ['date','month','month_name','month_str','datetime','year','year_full']
+month_dict_v1 = [{'label':x, 'value':x} for x in flow['month_name'].drop_duplicates()]
+year_dict =[{'label':x, 'value':x} for x in flow['year_full'].drop_duplicates()]
+popgroup_dict = [{'label':x, 'value':x} for x in flow['population_group'].drop_duplicates() if x != "All Population"]
 
 # Line graph of Actively Experiencing Homelessness
 actively = flow.loc[(flow['population_group'].isin(pop_groups+['All Population'])),\
@@ -415,6 +419,22 @@ app.layout = html.Div(children=[
     html.H6(
         "Public data on the people experiencing homelessness who are entering/leaving the shelter system",
         style={'textAlign': 'left', 'text-indent': '20px'}),
+    html.Div([
+        html.Div(["Filter By Year:",
+              dcc.Checklist(id="flow_year",options=year_dict,value=[yr for yr in flow['year_full'].drop_duplicates()])],
+        style={'textAlign':'left','float':'left','text-indent':'40px','display': 'inline-block','width':'49%'}),
+        html.Div(["Filter By Month:",
+              dcc.RangeSlider(id="flow_month",min=1,max=12,step=1,value=[1,12],marks=month_dict)],\
+        style={'textAlign':'left','float':'left','display': 'inline-block','width':'49%'})],
+        style={'backgroundColor': 'rgb(250, 250, 250)'},
+        className="row"),
+    html.Div([html.Div(["Filter By Population Group:",\
+              dcc.Checklist(id="flow_group",options=popgroup_dict,\
+                           value=[sh for sh in flow['population_group'].drop_duplicates() if sh != 'All Population'])],
+                    style={'textAlign':'left','text-indent':'20px','display':'inline-block','width':'49%'}),
+              html.H6("",style={'textAlign':'left','display':'inline-block','width':'49%'})],
+        style={'borderBottom': 'thin lightgrey solid', 'backgroundColor': 'rgb(250, 250, 250)'}),
+    html.Br(),
     html.Div([dcc.Graph(id="active_line", figure=active_fig)],
              style={'textAlign': 'center'}),
     html.Div([dcc.Graph(id="flowtype_chart", figure=flow_fig)],
@@ -505,6 +525,56 @@ app.layout = html.Div(children=[
              style={'textAlign':'center'}
     )
 ])
+
+@app.callback(
+    Output("active_line","figure"),
+    Output("flowtype_chart","figure"),
+    Output("age_line", "figure"),
+    Output("gender_line", "figure"),
+    Input("flow_year","value"),
+    Input("flow_month","value"),
+    Input("flow_group","value"),
+)
+def update_flow_graphs(flow_year,flow_month,flow_group):
+    years_to_use = [2020,2021] if flow_year == None else flow_year
+    months_to_use = list(month_dict.keys()) if flow_month == None else list(month_dict.keys())[(flow_month[0] - 1):flow_month[-1]]
+    selected_groups = ["All Population"] if flow_group == None else flow_group
+    active_chart_groups = pop_groups+["All Population"] if flow_group == None else flow_group+["All Population"]
+
+    # Line graph of Actively Experiencing Homelessness
+    actively = flow.loc[(flow['population_group'].isin(active_chart_groups))&\
+                        (flow['month']), \
+                        date_cols + ['actively_homeless', 'population_group']]
+    active_fig = px.line(actively, x="datetime", y="actively_homeless", color='population_group', \
+                         title='Population Actively Experiencing Homelessness In Toronto Shelters')
+    active_fig.update_xaxes(title_text='Time', \
+                            ticktext=actively['date'],
+                            tickvals=actively['datetime'])
+    active_fig.update_yaxes(title_text='Population Count')
+    active_fig.update_layout(title_x=0.5, showlegend=True, \
+                             autosize=True,
+                             height=600,
+                             width=1400)
+    active_fig.update_traces(mode='markers+lines',
+                             patch={"line": {"color": "black", "width": 6, "dash": 'dot'}},
+                             selector={"legendgroup": "All Population"})
+    # Grouped bar plot to show inflow vs outflow
+    all_population = flow.loc[flow['population_group'] == 'All Population', :]
+    pop_melt = pd.melt(all_population, id_vars=date_cols + ['population_group'], \
+                       value_vars=inflow + outflow, var_name='housing_status', value_name='count')
+    pop_melt['flow_type'] = ['Inflow' if flow_type in inflow else 'Outflow' for flow_type in pop_melt['housing_status']]
+    flow_fig = px.bar(pop_melt, x="datetime", y="count", barmode="group", \
+                      color="flow_type", title="Toronto Shelter System Inflow vs Outflow",
+                      hover_name="housing_status", hover_data=["housing_status", "flow_type", "count"], \
+                      labels={'flow_type': "Flow Type", "datetime": "Time", "count": "Population Count",
+                              "housing_status": "Housing Status"}, \
+                      color_discrete_map={'Inflow': 'red', 'Outflow': 'green'})
+    flow_fig.update_layout(title_x=0.5, showlegend=True, \
+                           autosize=True,
+                           height=600,
+                           width=1400)
+
+    return active_fig,flowtype_chart,age_line,gender_line
 
 @app.callback(
     Output("q2_pie","figure"),
