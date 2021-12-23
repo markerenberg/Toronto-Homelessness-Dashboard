@@ -19,9 +19,11 @@ from datetime import datetime
 
 
 
+
 # Get data files
 #local_path = r'C:\Users\marke\Downloads\Datasets\Toronto_Homelessness'
-local_path = r'/Users/merenberg/Desktop/dash-project/underlying_data'
+#local_path = r'/Users/merenberg/Desktop/dash-project/underlying_data'
+local_path = r'/Users/markerenberg/Documents/Github/homelessness-dash/homelessness-dash/underlying_data'
 sna_export = pd.read_csv(local_path+r'/sna2018opendata_export.csv').fillna(0)
 sna_rows = pd.read_csv(local_path+r'/sna2018opendata_keyrows.csv')
 sna_cols = pd.read_csv(local_path+r'/sna2018opendata_keycolumns.csv')
