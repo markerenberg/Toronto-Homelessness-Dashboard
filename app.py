@@ -265,7 +265,7 @@ occupancy_19[date_col] = occupancy_19['OCCUPANCY_DATETIME'].apply(lambda dt: dt.
 occupancy_21[date_col] = occupancy_21['OCCUPANCY_DATETIME'].apply(lambda dt: dt.strftime("%m/%d/%Y"))
 occupancy = pd.concat([occupancy_19,occupancy_20,occupancy_21],axis=0,ignore_index=True,sort=True)
 
-ssl._create_default_https_context = ssl._create_unverified_context
+#ssl._create_default_https_context = ssl._create_unverified_context
 nomi = pgeocode.Nominatim('ca')
 post_col = 'SHELTER_POSTAL_CODE'
 loc_cols = [post_col,'SHELTER_NAME','LATITUDE','LONGITUDE']
@@ -353,7 +353,7 @@ shelter_map.update_layout(
         style='light'
     ),
 )
-#plotly.offline.plot(shelter_map)
+plotly.offline.plot(shelter_map)
 
 # SHELTER TREND PLOTS
 sec_trend = occupancy_.groupby(occ_month_cols+['SECTOR'],as_index=False)\
