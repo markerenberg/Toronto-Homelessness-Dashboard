@@ -15,6 +15,8 @@ import dash_bootstrap_components as dbc
 from dash.dependencies import Input, Output
 import pgeocode
 import ssl
+import requests
+import urllib.parse
 from datetime import datetime
 
 
@@ -265,9 +267,10 @@ occupancy_19[date_col] = occupancy_19['OCCUPANCY_DATETIME'].apply(lambda dt: dt.
 occupancy_21[date_col] = occupancy_21['OCCUPANCY_DATETIME'].apply(lambda dt: dt.strftime("%m/%d/%Y"))
 occupancy = pd.concat([occupancy_19,occupancy_20,occupancy_21],axis=0,ignore_index=True,sort=True)
 
+
 #ssl._create_default_https_context = ssl._create_unverified_context
-nomi = pgeocode.Nominatim('ca')
-post_col = 'SHELTER_POSTAL_CODE'
+#nomi = pgeocode.Nominatim('ca')
+post_col, city_col, address_col, province_col = 'SHELTER_POSTAL_CODE', 'SHELTER_CITY', 'SHELTER_ADDRESS', 'SHELTER_PROVINCE'
 loc_cols = [post_col,'SHELTER_NAME','LATITUDE','LONGITUDE']
 month_dict = {1:"Jan",2:"Feb",3:"Mar",4:"Apr",5:"May",6:"Jun",7:"Jul",8:"Aug",9:"Sep",10:"Oct",11:"Nov",12:"Dec"}
 shelter_dict = [{'label':x, 'value':x} for x in occupancy['SHELTER_NAME'].drop_duplicates()]
@@ -278,14 +281,34 @@ sector_dict = [{'label':x, 'value':x} for x in occupancy['SECTOR'].drop_duplicat
 
 # Remove dashes from postal data, impute spaces if missing
 occupancy_ = occupancy.copy()
-occupancy[post_col] = occupancy[post_col].apply(lambda x: x.replace("-"," "))
 occupancy[post_col] = occupancy[post_col].apply(lambda x: x[:3] + " " + x[3:] if len(x)==6 else x)
+occupancy[post_col] = occupancy[post_col].apply(lambda x: x.replace("-"," "))
+# Remove typos, remove "floor" notations
+occupancy_[address_col] = occupancy_[address_col].replace("Bathrust","Bathurst")
+occupancy_[address_col] = occupancy_[address_col].replace(", 2nd floor","")
+
+# Look up all lat/long coordinates for each shelter
+occupancy_["FULL_ADDRESS"] = occupancy_[address_col] + ", " + occupancy_[city_col] + ", " + occupancy_[province_col]
+occupancy_["URL"] = occupancy_["FULL_ADDRESS"].apply(lambda x: 'https://nominatim.openstreetmap.org/search/'+urllib.parse.quote(x)+'?format=json')
+occupancy_["JSON"] = occupancy_["URL"].apply(lambda x: requests.get(x).json())
+occupancy_["JSON_LEN"] = occupancy_["JSON"].apply(lambda x: len(x))
+occupancy_['LATITUDE'] = occupancy_['JSON'].apply(lambda x: x[0]["lat"])
+occupancy_['LONGITUDE'] = occupancy_['JSON'].apply(lambda x: x[0]["lon"])
+occupancy_ = occupancy_.drop('JSON',axis=1)
+
+
+# Geopy
+#from geopy.geocoders import Nominatim
+from geopy.extra.rate_limiter import RateLimiter
+#geolocator = Nominatim(user_agent="markkerenberg@gmail.com")
+#location = geolocator.geocode({"query": {'postalCode': 'M5V 3W3', 'countryRegion': 'Canada'}})
+#gmaps_api = "AIzaSyCMyVBWC45lDXc4pJvB0-dQsPDuBK1q2zE"
 
 # Extract lat/long from postal codes
-unique_postal = occupancy[post_col].drop_duplicates().to_frame()
-unique_postal['LATITUDE'] = unique_postal[post_col].apply(lambda x: nomi.query_postal_code(x)['latitude'])
-unique_postal['LONGITUDE'] = unique_postal[post_col].apply(lambda x: nomi.query_postal_code(x)['longitude'])
-occupancy_ = occupancy_.merge(unique_postal,how='inner',on='SHELTER_POSTAL_CODE')
+#unique_postal = occupancy[post_col].drop_duplicates().to_frame()
+#unique_postal['LATITUDE'] = unique_postal[post_col].apply(lambda x: nomi.query_postal_code(x)['latitude'])
+#unique_postal['LONGITUDE'] = unique_postal[post_col].apply(lambda x: nomi.query_postal_code(x)['longitude'])
+#occupancy_ = occupancy_.merge(unique_postal,how='inner',on='SHELTER_POSTAL_CODE')
 
 # Create month,year columns
 occupancy_['MONTH'] = occupancy_['OCCUPANCY_DATE'].apply(lambda x: int(x[:2]))
