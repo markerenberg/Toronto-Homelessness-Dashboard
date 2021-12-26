@@ -17,6 +17,7 @@ import pgeocode
 import ssl
 import requests
 import urllib.parse
+import time
 from datetime import datetime
 
 
@@ -267,7 +268,6 @@ occupancy_19[date_col] = occupancy_19['OCCUPANCY_DATETIME'].apply(lambda dt: dt.
 occupancy_21[date_col] = occupancy_21['OCCUPANCY_DATETIME'].apply(lambda dt: dt.strftime("%m/%d/%Y"))
 occupancy = pd.concat([occupancy_19,occupancy_20,occupancy_21],axis=0,ignore_index=True,sort=True)
 
-
 #ssl._create_default_https_context = ssl._create_unverified_context
 #nomi = pgeocode.Nominatim('ca')
 post_col, city_col, address_col, province_col = 'SHELTER_POSTAL_CODE', 'SHELTER_CITY', 'SHELTER_ADDRESS', 'SHELTER_PROVINCE'
@@ -284,25 +284,31 @@ occupancy_ = occupancy.copy()
 occupancy[post_col] = occupancy[post_col].apply(lambda x: x[:3] + " " + x[3:] if len(x)==6 else x)
 occupancy[post_col] = occupancy[post_col].apply(lambda x: x.replace("-"," "))
 # Remove typos, remove "floor" notations
-occupancy_[address_col] = occupancy_[address_col].replace("Bathrust","Bathurst")
-occupancy_[address_col] = occupancy_[address_col].replace(", 2nd floor","")
+occupancy_[address_col] = occupancy_[address_col].apply(lambda x: x.replace("Bathrust","Bathurst"))
+occupancy_[address_col] = occupancy_[address_col].apply(lambda x: x.replace(", 2nd floor",""))
 
-# Look up all lat/long coordinates for each shelter
+# Create full address using city and province
 occupancy_["FULL_ADDRESS"] = occupancy_[address_col] + ", " + occupancy_[city_col] + ", " + occupancy_[province_col]
-occupancy_["URL"] = occupancy_["FULL_ADDRESS"].apply(lambda x: 'https://nominatim.openstreetmap.org/search/'+urllib.parse.quote(x)+'?format=json')
-occupancy_["JSON"] = occupancy_["URL"].apply(lambda x: requests.get(x).json())
-occupancy_["JSON_LEN"] = occupancy_["JSON"].apply(lambda x: len(x))
-occupancy_['LATITUDE'] = occupancy_['JSON'].apply(lambda x: x[0]["lat"])
-occupancy_['LONGITUDE'] = occupancy_['JSON'].apply(lambda x: x[0]["lon"])
-occupancy_ = occupancy_.drop('JSON',axis=1)
 
+# Lat / long extraction using geopy
+from geopy.geocoders import Nominatim
+geolocator = Nominatim(user_agent="markkerenberg@gmail.com")
 
-# Geopy
-#from geopy.geocoders import Nominatim
-from geopy.extra.rate_limiter import RateLimiter
-#geolocator = Nominatim(user_agent="markkerenberg@gmail.com")
-#location = geolocator.geocode({"query": {'postalCode': 'M5V 3W3', 'countryRegion': 'Canada'}})
-#gmaps_api = "AIzaSyCMyVBWC45lDXc4pJvB0-dQsPDuBK1q2zE"
+# Unique addresses for geocoder
+unique_adds = occupancy_["FULL_ADDRESS"].drop_duplicates().to_frame()
+
+# Geocode full addresses
+#t0 = time.time()
+unique_adds["LOCATION"] = unique_adds["FULL_ADDRESS"].apply(lambda x: geolocator.geocode(x))
+#t1 = time.time()
+#print(f"Time taken to geocode locations: {(t1-t0)/60}m")
+unique_adds = unique_adds[unique_adds["LOCATION"].notnull()].reset_index(drop=True)
+unique_adds["LATITUDE"] = unique_adds["LOCATION"].apply(lambda x: x.latitude)
+unique_adds["LONGITUDE"] = unique_adds["LOCATION"].apply(lambda x: x.longitude)
+unique_adds = unique_adds.drop("LOCATION",axis=1)
+
+# Merge back with occupancy data
+occupancy_ = occupancy_.merge(unique_adds,how='inner',on='FULL_ADDRESS')
 
 # Extract lat/long from postal codes
 #unique_postal = occupancy[post_col].drop_duplicates().to_frame()
@@ -376,7 +382,7 @@ shelter_map.update_layout(
         style='light'
     ),
 )
-plotly.offline.plot(shelter_map)
+#plotly.offline.plot(shelter_map)
 
 # SHELTER TREND PLOTS
 sec_trend = occupancy_.groupby(occ_month_cols+['SECTOR'],as_index=False)\
