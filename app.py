@@ -290,27 +290,13 @@ occupancy_[address_col] = occupancy_[address_col].apply(lambda x: x.replace(", 2
 # Create full address using city and province
 occupancy_["FULL_ADDRESS"] = occupancy_[address_col] + ", " + occupancy_[city_col] + ", " + occupancy_[province_col]
 
-# Lat / long extraction using geopy
-from geopy.geocoders import Nominatim
-geolocator = Nominatim(user_agent="markkerenberg@gmail.com")
-
-# Unique addresses for geocoder
-unique_adds = occupancy_["FULL_ADDRESS"].drop_duplicates().to_frame()
-
-# Geocode full addresses
-#t0 = time.time()
-unique_adds["LOCATION"] = unique_adds["FULL_ADDRESS"].apply(lambda x: geolocator.geocode(x))
-#t1 = time.time()
-#print(f"Time taken to geocode locations: {(t1-t0)/60}m")
-unique_adds = unique_adds[unique_adds["LOCATION"].notnull()].reset_index(drop=True)
-unique_adds["LATITUDE"] = unique_adds["LOCATION"].apply(lambda x: x.latitude)
-unique_adds["LONGITUDE"] = unique_adds["LOCATION"].apply(lambda x: x.longitude)
-unique_adds = unique_adds.drop("LOCATION",axis=1)
+# Read in coordinates for each shelter's address
+occupancy_coords = pd.read_csv(local_path+r"/occupancy_coordinates.csv")
 
 # Merge back with occupancy data
-occupancy_ = occupancy_.merge(unique_adds,how='inner',on='FULL_ADDRESS')
+occupancy_ = occupancy_.merge(occupancy_coords,how='inner',on='FULL_ADDRESS')
 
-# Extract lat/long from postal codes
+# Previous code for extracting lat/long from postal codes
 #unique_postal = occupancy[post_col].drop_duplicates().to_frame()
 #unique_postal['LATITUDE'] = unique_postal[post_col].apply(lambda x: nomi.query_postal_code(x)['latitude'])
 #unique_postal['LONGITUDE'] = unique_postal[post_col].apply(lambda x: nomi.query_postal_code(x)['longitude'])
