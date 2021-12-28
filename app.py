@@ -263,10 +263,39 @@ date_col = "OCCUPANCY_DATE"
 occupancy_19 = occupancy_19.drop("_id",axis=1)
 occupancy_21 = occupancy_21.drop("_id",axis=1)
 occupancy_19['OCCUPANCY_DATETIME'] = occupancy_19[date_col].apply(lambda dt: datetime.strptime(dt.replace("T"," "),"%Y-%m-%d %H:%M:%S"))
-occupancy_21['OCCUPANCY_DATETIME'] = occupancy_21[date_col].apply(lambda dt: datetime.strptime(dt.replace("T"," "),"%Y-%m-%d %H:%M:%S"))
+occupancy_21['OCCUPANCY_DATETIME'] = occupancy_21[date_col].apply(lambda dt: datetime.strptime(dt.replace("T"," "),"%Y-%m-%d"))
 occupancy_19[date_col] = occupancy_19['OCCUPANCY_DATETIME'].apply(lambda dt: dt.strftime("%m/%d/%Y"))
 occupancy_21[date_col] = occupancy_21['OCCUPANCY_DATETIME'].apply(lambda dt: dt.strftime("%m/%d/%Y"))
-occupancy = pd.concat([occupancy_19,occupancy_20,occupancy_21],axis=0,ignore_index=True,sort=True)
+
+# Make changes to match 2021 occupancy data with previous years
+occ_21_cols = {"LOCATION_NAME": "SHELTER_NAME",
+               "LOCATION_ADDRESS": "SHELTER_ADDRESS",
+               "LOCATION_POSTAL_CODE": "SHELTER_POSTAL_CODE",
+               "LOCATION_CITY": "SHELTER_CITY",
+               "LOCATION_PROVINCE": "SHELTER_PROVINCE"}
+occupancy_21 = occupancy_21.rename(columns=occ_21_cols)
+occupancy_bed = occupancy_21[occupancy_21["CAPACITY_TYPE"]=="Bed Based Capacity"].reset_index(drop=True)
+occupancy_room = occupancy_21[occupancy_21["CAPACITY_TYPE"]=="Room Based Capacity"].reset_index(drop=True)
+occupancy_bed["OCCUPANCY"] = occupancy_bed["OCCUPIED_BEDS"].astype("int")
+occupancy_bed["CAPACITY"] = occupancy_bed["CAPACITY_ACTUAL_BED"].astype("int")
+occupancy_room["OCCUPANCY"] = occupancy_room["OCCUPIED_ROOMS"].astype("int")
+occupancy_room["CAPACITY"] = occupancy_room["CAPACITY_ACTUAL_ROOM"].astype("int")
+# Group by shelter, merge two types of shelter data
+occupancy_cols = ["OCCUPANCY_DATE","ORGANIZATION_NAME","SHELTER_NAME","SHELTER_ADDRESS",
+                  "SHELTER_CITY","SHELTER_PROVINCE","SHELTER_POSTAL_CODE","PROGRAM_NAME",
+                  "SECTOR"]
+occupancy_21 = pd.concat([occupancy_bed[occupancy_cols+["OCCUPANCY","CAPACITY"]],\
+                         occupancy_room[occupancy_cols+["OCCUPANCY","CAPACITY"]]],\
+                         axis=0,ignore_index=True,sort=False)
+
+# Merge all years' occupancy data
+occupancy = pd.concat([occupancy_19.drop(["FACILITY_NAME","OCCUPANCY_DATETIME"],axis=1),
+                       occupancy_20.drop("FACILITY_NAME",axis=1),
+                       occupancy_21],axis=0,ignore_index=True,sort=True)
+
+# Drop null names/postal codes
+occupancy = occupancy[(occupancy["SHELTER_NAME"].notnull())&\
+                      (occupancy["SHELTER_POSTAL_CODE"].notnull())].reset_index(drop=True)
 
 #ssl._create_default_https_context = ssl._create_unverified_context
 #nomi = pgeocode.Nominatim('ca')
@@ -350,7 +379,7 @@ shelter_map.add_trace(go.Scattermapbox(
 )
 
 shelter_map.update_layout(
-    title="Shelter Capacity in Greater Toronto Area (2020)",
+    title="Shelter Capacity in Greater Toronto Area (2019-2021)",
     autosize=True,
     height=600,
     width=1400,
