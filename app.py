@@ -263,10 +263,39 @@ date_col = "OCCUPANCY_DATE"
 occupancy_19 = occupancy_19.drop("_id",axis=1)
 occupancy_21 = occupancy_21.drop("_id",axis=1)
 occupancy_19['OCCUPANCY_DATETIME'] = occupancy_19[date_col].apply(lambda dt: datetime.strptime(dt.replace("T"," "),"%Y-%m-%d %H:%M:%S"))
-occupancy_21['OCCUPANCY_DATETIME'] = occupancy_21[date_col].apply(lambda dt: datetime.strptime(dt.replace("T"," "),"%Y-%m-%d %H:%M:%S"))
+occupancy_21['OCCUPANCY_DATETIME'] = occupancy_21[date_col].apply(lambda dt: datetime.strptime(dt.replace("T"," "),"%Y-%m-%d"))
 occupancy_19[date_col] = occupancy_19['OCCUPANCY_DATETIME'].apply(lambda dt: dt.strftime("%m/%d/%Y"))
 occupancy_21[date_col] = occupancy_21['OCCUPANCY_DATETIME'].apply(lambda dt: dt.strftime("%m/%d/%Y"))
-occupancy = pd.concat([occupancy_19,occupancy_20,occupancy_21],axis=0,ignore_index=True,sort=True)
+
+# Make changes to match 2021 occupancy data with previous years
+occ_21_cols = {"LOCATION_NAME": "SHELTER_NAME",
+               "LOCATION_ADDRESS": "SHELTER_ADDRESS",
+               "LOCATION_POSTAL_CODE": "SHELTER_POSTAL_CODE",
+               "LOCATION_CITY": "SHELTER_CITY",
+               "LOCATION_PROVINCE": "SHELTER_PROVINCE"}
+occupancy_21 = occupancy_21.rename(columns=occ_21_cols)
+occupancy_bed = occupancy_21[occupancy_21["CAPACITY_TYPE"]=="Bed Based Capacity"].reset_index(drop=True)
+occupancy_room = occupancy_21[occupancy_21["CAPACITY_TYPE"]=="Room Based Capacity"].reset_index(drop=True)
+occupancy_bed["OCCUPANCY"] = occupancy_bed["OCCUPIED_BEDS"].astype("int")
+occupancy_bed["CAPACITY"] = occupancy_bed["CAPACITY_ACTUAL_BED"].astype("int")
+occupancy_room["OCCUPANCY"] = occupancy_room["OCCUPIED_ROOMS"].astype("int")
+occupancy_room["CAPACITY"] = occupancy_room["CAPACITY_ACTUAL_ROOM"].astype("int")
+# Group by shelter, merge two types of shelter data
+occupancy_cols = ["OCCUPANCY_DATE","ORGANIZATION_NAME","SHELTER_NAME","SHELTER_ADDRESS",
+                  "SHELTER_CITY","SHELTER_PROVINCE","SHELTER_POSTAL_CODE","PROGRAM_NAME",
+                  "SECTOR"]
+occupancy_21 = pd.concat([occupancy_bed[occupancy_cols+["OCCUPANCY","CAPACITY"]],\
+                         occupancy_room[occupancy_cols+["OCCUPANCY","CAPACITY"]]],\
+                         axis=0,ignore_index=True,sort=False)
+
+# Merge all years' occupancy data
+occupancy = pd.concat([occupancy_19.drop(["FACILITY_NAME","OCCUPANCY_DATETIME"],axis=1),
+                       occupancy_20.drop("FACILITY_NAME",axis=1),
+                       occupancy_21],axis=0,ignore_index=True,sort=True)
+
+# Drop null names/postal codes
+occupancy = occupancy[(occupancy["SHELTER_NAME"].notnull())&\
+                      (occupancy["SHELTER_POSTAL_CODE"].notnull())].reset_index(drop=True)
 
 #ssl._create_default_https_context = ssl._create_unverified_context
 #nomi = pgeocode.Nominatim('ca')
@@ -290,27 +319,13 @@ occupancy_[address_col] = occupancy_[address_col].apply(lambda x: x.replace(", 2
 # Create full address using city and province
 occupancy_["FULL_ADDRESS"] = occupancy_[address_col] + ", " + occupancy_[city_col] + ", " + occupancy_[province_col]
 
-# Lat / long extraction using geopy
-from geopy.geocoders import Nominatim
-geolocator = Nominatim(user_agent="markkerenberg@gmail.com")
-
-# Unique addresses for geocoder
-unique_adds = occupancy_["FULL_ADDRESS"].drop_duplicates().to_frame()
-
-# Geocode full addresses
-#t0 = time.time()
-unique_adds["LOCATION"] = unique_adds["FULL_ADDRESS"].apply(lambda x: geolocator.geocode(x))
-#t1 = time.time()
-#print(f"Time taken to geocode locations: {(t1-t0)/60}m")
-unique_adds = unique_adds[unique_adds["LOCATION"].notnull()].reset_index(drop=True)
-unique_adds["LATITUDE"] = unique_adds["LOCATION"].apply(lambda x: x.latitude)
-unique_adds["LONGITUDE"] = unique_adds["LOCATION"].apply(lambda x: x.longitude)
-unique_adds = unique_adds.drop("LOCATION",axis=1)
+# Read in coordinates for each shelter's address
+occupancy_coords = pd.read_csv(local_path+r"/occupancy_coordinates.csv")
 
 # Merge back with occupancy data
-occupancy_ = occupancy_.merge(unique_adds,how='inner',on='FULL_ADDRESS')
+occupancy_ = occupancy_.merge(occupancy_coords,how='inner',on='FULL_ADDRESS')
 
-# Extract lat/long from postal codes
+# Previous code for extracting lat/long from postal codes
 #unique_postal = occupancy[post_col].drop_duplicates().to_frame()
 #unique_postal['LATITUDE'] = unique_postal[post_col].apply(lambda x: nomi.query_postal_code(x)['latitude'])
 #unique_postal['LONGITUDE'] = unique_postal[post_col].apply(lambda x: nomi.query_postal_code(x)['longitude'])
@@ -364,7 +379,7 @@ shelter_map.add_trace(go.Scattermapbox(
 )
 
 shelter_map.update_layout(
-    title="Shelter Capacity in Greater Toronto Area (2020)",
+    title="Shelter Capacity in Greater Toronto Area (2019-2021)",
     autosize=True,
     height=600,
     width=1400,
