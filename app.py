@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ======== Dash App ======== #
 
-
+import os
 import numpy as np
 import pandas as pd
 import plotly.express as px
@@ -13,11 +13,11 @@ import dash_core_components as dcc
 import dash_html_components as html
 import dash_bootstrap_components as dbc
 from dash.dependencies import Input, Output
-import pgeocode
-import ssl
-import requests
-import urllib.parse
-import time
+# import pgeocode
+# import ssl
+# import requests
+# import urllib.parse
+# import time
 from datetime import datetime
 
 
@@ -26,7 +26,9 @@ from datetime import datetime
 # Get data files
 #local_path = r'C:\Users\marke\Downloads\Datasets\Toronto_Homelessness'
 #local_path = r'/Users/merenberg/Desktop/dash-project/underlying_data'
-local_path = r'/Users/markerenberg/Documents/Github/homelessness-dash/homelessness-dash/underlying_data'
+#local_path = r'/Users/markerenberg/Documents/Github/homelessness-dash/homelessness-dash/underlying_data'
+ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+local_path = ROOT_DIR + r'/underlying_data'
 sna_export = pd.read_csv(local_path+r'/sna2018opendata_export.csv').fillna(0)
 sna_rows = pd.read_csv(local_path+r'/sna2018opendata_keyrows.csv')
 sna_cols = pd.read_csv(local_path+r'/sna2018opendata_keycolumns.csv')
