@@ -14,14 +14,6 @@ import dash_bootstrap_components as dbc
 from dash.dependencies import Input, Output
 from datetime import datetime
 
-# Heroku env variable definition
-# ON_HEROKU = os.environ.get('ON_HEROKU')
-# if ON_HEROKU:
-#     # get the heroku port
-#     port = int(os.environ.get('PORT', 8050))
-# else:
-#     port = 8050
-
 # Get data files
 #local_path = r'C:\Users\marke\Downloads\Datasets\Toronto_Homelessness'
 #local_path = r'/Users/merenberg/Desktop/dash-project/underlying_data'
