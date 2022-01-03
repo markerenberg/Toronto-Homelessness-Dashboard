@@ -17,14 +17,13 @@ from datetime import datetime
 # Get data files
 #local_path = r'C:\Users\marke\Downloads\Datasets\Toronto_Homelessness'
 #local_path = r'/Users/merenberg/Desktop/dash-project/underlying_data'
-#local_path = r'/Users/markerenberg/Documents/Github/homelessness-dash/homelessness-dash/underlying_data'
-ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
-local_path = ROOT_DIR + r'/underlying_data'
+local_path = r'/Users/markerenberg/Documents/Github/homelessness-dash/homelessness-dash/underlying_data'
+# ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+# local_path = ROOT_DIR + r'/underlying_data'
 sna_export = pd.read_csv(local_path+r'/sna2018opendata_export.csv').fillna(0)
 sna_rows = pd.read_csv(local_path+r'/sna2018opendata_keyrows.csv')
 sna_cols = pd.read_csv(local_path+r'/sna2018opendata_keycolumns.csv')
-#shelter_flow = pd.read_csv(local_path+r'/toronto-shelter-system-flow_may11.csv')
-shelter_flow = pd.read_csv(local_path+r'/toronto-shelter-system-flow_may28.csv')
+shelter_flow = pd.read_csv(local_path+r'/toronto-shelter-system-flow-jan22.csv')
 occupancy_21 = pd.read_csv(local_path+r'/Daily_shelter_occupancy_current.csv')
 occupancy_20 = pd.read_csv(local_path+r'/daily-shelter-occupancy-2020.csv')
 occupancy_19 = pd.read_csv(local_path+r'/daily-shelter-occupancy-2019.csv')
