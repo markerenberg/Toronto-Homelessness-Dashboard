@@ -1,37 +1,29 @@
 # -*- coding: utf-8 -*-
 # ======== Dash App ======== #
 
-
+import os
 import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-import plotly
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
 import dash_bootstrap_components as dbc
 from dash.dependencies import Input, Output
-import pgeocode
-import ssl
-import requests
-import urllib.parse
-import time
 from datetime import datetime
-
-
-
 
 # Get data files
 #local_path = r'C:\Users\marke\Downloads\Datasets\Toronto_Homelessness'
 #local_path = r'/Users/merenberg/Desktop/dash-project/underlying_data'
-local_path = r'/Users/markerenberg/Documents/Github/homelessness-dash/homelessness-dash/underlying_data'
+#local_path = r'/Users/markerenberg/Documents/Github/homelessness-dash/homelessness-dash/underlying_data'
+ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+local_path = ROOT_DIR + r'/underlying_data'
 sna_export = pd.read_csv(local_path+r'/sna2018opendata_export.csv').fillna(0)
 sna_rows = pd.read_csv(local_path+r'/sna2018opendata_keyrows.csv')
 sna_cols = pd.read_csv(local_path+r'/sna2018opendata_keycolumns.csv')
-#shelter_flow = pd.read_csv(local_path+r'/toronto-shelter-system-flow_may11.csv')
-shelter_flow = pd.read_csv(local_path+r'/toronto-shelter-system-flow_may28.csv')
+shelter_flow = pd.read_csv(local_path+r'/toronto-shelter-system-flow-jan22.csv')
 occupancy_21 = pd.read_csv(local_path+r'/Daily_shelter_occupancy_current.csv')
 occupancy_20 = pd.read_csv(local_path+r'/daily-shelter-occupancy-2020.csv')
 occupancy_19 = pd.read_csv(local_path+r'/daily-shelter-occupancy-2019.csv')
@@ -274,6 +266,7 @@ occ_21_cols = {"LOCATION_NAME": "SHELTER_NAME",
                "LOCATION_CITY": "SHELTER_CITY",
                "LOCATION_PROVINCE": "SHELTER_PROVINCE"}
 occupancy_21 = occupancy_21.rename(columns=occ_21_cols)
+occupancy_21.loc[occupancy_21["SECTOR"]=="Mixed Adult","SECTOR"] = "Co-ed"
 occupancy_bed = occupancy_21[occupancy_21["CAPACITY_TYPE"]=="Bed Based Capacity"].reset_index(drop=True)
 occupancy_room = occupancy_21[occupancy_21["CAPACITY_TYPE"]=="Room Based Capacity"].reset_index(drop=True)
 occupancy_bed["OCCUPANCY"] = occupancy_bed["OCCUPIED_BEDS"].astype("int")
@@ -468,10 +461,25 @@ colors = {
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.LITERA])
 #app = dash.Dash(__name__, external_stylesheets=['https://codepen.io/chriddyp/pen/bWLwgP.css'])
 
+server = app.server
+
 app.layout = html.Div(children=[
-    html.H1(children='Homelessness Dash',
+    html.H1(children='Toronto Homelessness Dashboard',
             style={'textAlign': 'center','color': colors['text']}
             ),
+    html.Br(),
+    html.H6(children='This dashboard is a visual investigation into the current state of homelessness in the city of Toronto.',
+            style={'textAlign': 'left','color': colors['text'],'font-weight': 'bold','text-indent': '20px'}),
+    html.P(children='The data represented has been gathered from three sources:',
+            style={'textAlign': 'left','color': colors['text'],'text-indent': '20px'}),
+    html.P(children='1. Shelter System Flow: Data on who is entering and leaving the Toronto shelter system.',
+            style={'textAlign': 'left','color': colors['text'],'text-indent': '40px'}),
+    html.P(children='2. Daily Shelter Usage: Data on occupancy and capacity of the Toronto shelter system.',
+            style={'textAlign': 'left','color': colors['text'],'text-indent': '40px'}),
+    html.P(children='3. Street Needs Assessments: Point-in-time count and survey data on who is experiencing homelessness in Toronto.',
+            style={'textAlign': 'left','color': colors['text'],'text-indent': '40px'}),
+    html.P(children="All data has been collected by the City of Toronto, and can be found at the Housing & Homelessness Research & Reports section of the City's webpage.",
+            style={'textAlign': 'left','color': colors['text'],'text-indent':'20px'}),
     html.Br(),
     html.H5(children='Toronto Shelter System Flow Data',
             style={'textAlign': 'left',
