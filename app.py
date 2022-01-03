@@ -266,6 +266,7 @@ occ_21_cols = {"LOCATION_NAME": "SHELTER_NAME",
                "LOCATION_CITY": "SHELTER_CITY",
                "LOCATION_PROVINCE": "SHELTER_PROVINCE"}
 occupancy_21 = occupancy_21.rename(columns=occ_21_cols)
+occupancy_21.loc[occupancy_21["SECTOR"]=="Mixed Adult","SECTOR"] = "Co-ed"
 occupancy_bed = occupancy_21[occupancy_21["CAPACITY_TYPE"]=="Bed Based Capacity"].reset_index(drop=True)
 occupancy_room = occupancy_21[occupancy_21["CAPACITY_TYPE"]=="Room Based Capacity"].reset_index(drop=True)
 occupancy_bed["OCCUPANCY"] = occupancy_bed["OCCUPIED_BEDS"].astype("int")
