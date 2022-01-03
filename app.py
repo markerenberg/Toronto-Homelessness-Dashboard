@@ -17,9 +17,9 @@ from datetime import datetime
 # Get data files
 #local_path = r'C:\Users\marke\Downloads\Datasets\Toronto_Homelessness'
 #local_path = r'/Users/merenberg/Desktop/dash-project/underlying_data'
-local_path = r'/Users/markerenberg/Documents/Github/homelessness-dash/homelessness-dash/underlying_data'
-# ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
-# local_path = ROOT_DIR + r'/underlying_data'
+#local_path = r'/Users/markerenberg/Documents/Github/homelessness-dash/homelessness-dash/underlying_data'
+ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+local_path = ROOT_DIR + r'/underlying_data'
 sna_export = pd.read_csv(local_path+r'/sna2018opendata_export.csv').fillna(0)
 sna_rows = pd.read_csv(local_path+r'/sna2018opendata_keyrows.csv')
 sna_cols = pd.read_csv(local_path+r'/sna2018opendata_keycolumns.csv')
@@ -463,9 +463,22 @@ app = dash.Dash(__name__, external_stylesheets=[dbc.themes.LITERA])
 server = app.server
 
 app.layout = html.Div(children=[
-    html.H1(children='Homelessness Dash',
+    html.H1(children='Toronto Homelessness Dashboard',
             style={'textAlign': 'center','color': colors['text']}
             ),
+    html.Br(),
+    html.H6(children='This dashboard is a visual investigation into the current state of homelessness in the city of Toronto.',
+            style={'textAlign': 'left','color': colors['text'],'font-weight': 'bold','text-indent': '20px'}),
+    html.P(children='The data represented has been gathered from three sources:',
+            style={'textAlign': 'left','color': colors['text'],'text-indent': '20px'}),
+    html.P(children='1. Shelter System Flow: Data on who is entering and leaving the Toronto shelter system.',
+            style={'textAlign': 'left','color': colors['text'],'text-indent': '40px'}),
+    html.P(children='2. Daily Shelter Usage: Data on occupancy and capacity of the Toronto shelter system.',
+            style={'textAlign': 'left','color': colors['text'],'text-indent': '40px'}),
+    html.P(children='3. Street Needs Assessments: Point-in-time count and survey data on who is experiencing homelessness in Toronto.',
+            style={'textAlign': 'left','color': colors['text'],'text-indent': '40px'}),
+    html.P(children="All data has been collected by the City of Toronto, and can be found at the Housing & Homelessness Research & Reports section of the City's webpage.",
+            style={'textAlign': 'left','color': colors['text'],'text-indent':'20px'}),
     html.Br(),
     html.H5(children='Toronto Shelter System Flow Data',
             style={'textAlign': 'left',
