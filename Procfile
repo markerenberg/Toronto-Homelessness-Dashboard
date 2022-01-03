@@ -1,1 +1,1 @@
-web: gunicorn app:server -b 0.0.0.0:8050
+web: gunicorn app:server --preload -b 0.0.0.0:8050
