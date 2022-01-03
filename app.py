@@ -20,8 +20,13 @@ from dash.dependencies import Input, Output
 # import time
 from datetime import datetime
 
-
-
+# Heroku env variable definition
+# ON_HEROKU = os.environ.get('ON_HEROKU')
+# if ON_HEROKU:
+#     # get the heroku port
+#     port = int(os.environ.get('PORT', 8050))
+# else:
+#     port = 8050
 
 # Get data files
 #local_path = r'C:\Users\marke\Downloads\Datasets\Toronto_Homelessness'
