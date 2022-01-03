@@ -7,17 +7,11 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-import plotly
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
 import dash_bootstrap_components as dbc
 from dash.dependencies import Input, Output
-# import pgeocode
-# import ssl
-# import requests
-# import urllib.parse
-# import time
 from datetime import datetime
 
 # Heroku env variable definition
