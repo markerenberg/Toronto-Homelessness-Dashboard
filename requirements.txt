@@ -20,7 +20,7 @@ Jinja2~=3.0.1
 itsdangerous~=2.0.1
 geopy~=2.2.0
 geographiclib~=1.52
-numpy~=1.20.3
+numpy
 setuptools~=57.0.0
 patsy~=0.5.1
 pandas~=1.2.4
