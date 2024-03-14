@@ -1,0 +1,10 @@
+﻿COLUMN NAME,DESCRIPTION
+SNA RESPONSE CATEGORY,"Brief descriptor of response category; metadata provided in ""Key-Rows"" table"
+OUTDOORS,Count or average of responses provided by respondents surveyed in outdoor locations
+CITY-ADMINISTERED SHELTERS,"Count or average of responses provided by respondents surveyed in city-administered shelters (sum of single adults, family and youth shelter counts)"
+SINGLE ADULTS,Count or average of responses provided by respondents surveyed in all city-administered shelters who are single 25 years of age and over without dependents
+FAMILY,Count or average of responses provided by respondents surveyed in all city-administered shelters who have dependents
+YOUTH,Count or average of responses provided by respondents surveyed in all city-administered shelters who are between the ages of 16 and 24
+24-HR RESPITE,Count or average of responses provided by respondents surveyed in 24-hour respite services
+VAW SHELTERS,Count or average of responses provided by respondents surveyed in Violence Against Women (VAW) shelters
+TOTAL,Count or average of total responses
