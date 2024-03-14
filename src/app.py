@@ -8,7 +8,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import dash
-from dash import dcc
+from dash import dcc, callback
 from dash import html
 import dash_bootstrap_components as dbc
 from dash.dependencies import Input, Output
@@ -601,7 +601,7 @@ app.layout = html.Div(children=[
     )
 ])
 
-@app.callback(
+@callback(
     Output("active_line","figure"),
     Output("flowtype_chart","figure"),
     Output("age_line", "figure"),
@@ -609,6 +609,7 @@ app.layout = html.Div(children=[
     Input("flow_year","value"),
     Input("flow_month","value"),
     Input("flow_group","value"),
+    prevent_initial_call=True
 )
 def update_flow_graphs(flow_year,flow_month,flow_group):
     years_to_use = [2020,2021] if flow_year == None else flow_year
@@ -692,7 +693,7 @@ def update_flow_graphs(flow_year,flow_month,flow_group):
     gend_fig.update_traces(mode='markers+lines')
     return active_fig, flow_fig, age_fig, gend_fig
 
-@app.callback(
+@callback(
     Output("q2_pie","figure"),
     Output("q23_bar","figure"),
     Output("q19_bar","figure"),
@@ -700,6 +701,7 @@ def update_flow_graphs(flow_year,flow_month,flow_group):
     Output("q22_bar","figure"),
     Input("q1_bar","clickData"),
     Input("q1_bar","selectedData"),
+    prevent_initial_call=True
 )
 def update_street_needs(clickData,selectedData):
     # STREET NEEDS
@@ -740,11 +742,12 @@ def update_street_needs(clickData,selectedData):
     q22_bar.update_traces(marker_color='crimson')
     return q2_pie, q23_bar, q19_bar, q6_bar, q22_bar
 
-@app.callback(
+@callback(
     Output("shelter_map", "figure"),
     Input("shelter_year", "value"),
     Input("shelter_month", "value"),
-    Input("sector", "value")
+    Input("sector", "value"),
+    prevent_initial_call=True
 )
 def update_shelter_map(shelter_year,shelter_month,sector):
     # Shelter Occupancy Map
@@ -798,14 +801,15 @@ def update_shelter_map(shelter_year,shelter_month,sector):
 
     return shelter_map
 
-@app.callback(
+@callback(
     Output("sector_trend", "figure"),
     Output("shelter_trend", "figure"),
     Input("shelter_map", "clickData"),
     Input("shelter_map", "selectedData"),
     Input("shelter_year", "value"),
     Input("shelter_month", "value"),
-    Input("sector", "value")
+    Input("sector", "value"),
+    prevent_initial_call=True
 )
 def update_shelter_trend(shelterClick,shelterSelect,shelter_year,shelter_month,sector):
     years_to_use = [2019, 2020, 2021] if shelter_year == None else shelter_year
@@ -860,4 +864,4 @@ def update_shelter_trend(shelterClick,shelterSelect,shelter_year,shelter_month,s
 
 
 if __name__ == '__main__':
-    app.run_server(debug=False)
+   app.run_server(debug=False)
